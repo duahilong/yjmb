@@ -1,0 +1,6 @@
+# HWInfo 依赖
+pywin32>=306        # pythoncom + WMI 底层 COM 支持
+wmi>=1.5.1
+psutil>=5.9.0
+pynvml>=11.5.0
+PyYAML>=6.0

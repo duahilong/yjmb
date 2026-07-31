@@ -1,0 +1,23 @@
+# HWInfo 默认配置
+# 所有类别默认显示
+
+display:
+  os: true
+  motherboard: true
+  cpu: true
+  memory: true
+  gpu: true
+  storage: true
+  network: true
+  audio: true
+  monitor: true
+
+# 输出设置
+output:
+  color: auto        # auto: 自动检测终端 | always: 强制彩色 | never: 纯文本
+  unicode: auto      # auto: 自动检测 | always: 使用Unicode框线 | never: ASCII
+
+# 采集设置
+collect:
+  timeout: 10        # 单模块超时（秒）
+  parallel: true     # 是否并行采集
