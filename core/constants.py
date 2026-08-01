@@ -4,8 +4,12 @@ core/constants.py - 全局共享常量
 避免 VERSION、排序权重、brief 字段等在多处重复定义。
 """
 
-# 工具版本号（唯一来源）
-VERSION = "0.1.0"
+# 工具版本号：优先从包元数据读取，fallback 到硬编码值
+try:
+    from importlib.metadata import version as _pkg_version
+    VERSION = _pkg_version("hwinfo")
+except Exception:
+    VERSION = "0.1.0"
 
 # 模块显示排序权重
 ORDER_MAP = {

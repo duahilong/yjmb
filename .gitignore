@@ -28,3 +28,6 @@ Desktop.ini
 *.log
 config.yaml
 test_output.json
+
+# 测试
+.pytest_cache/

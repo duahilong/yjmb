@@ -23,9 +23,12 @@ class AudioCollector(BaseCollector):
         if not devices:
             raise CollectorError(self.name, "未检测到音频设备")
 
+        # 构建 PNPDeviceID → 驱动版本 的映射
+        driver_map = self._build_driver_map(c)
+
         audio_list = []
         for device in devices:
-            info = self._parse_device(device)
+            info = self._parse_device(device, driver_map)
             audio_list.append(info)
 
         return {"音频设备列表": audio_list}
@@ -33,13 +36,58 @@ class AudioCollector(BaseCollector):
     def get_brief_fields(self) -> list[str]:
         return ["音频设备列表"]
 
-    def _parse_device(self, device) -> dict:
+    def _build_driver_map(self, c) -> dict:
+        """通过注册表构建 PNPDeviceID → 驱动版本 映射（快速，<10ms）"""
+        # 注：不再使用 Win32_PnPSignedDriver（枚举所有驱动，耗时 3-5s）
+        # 改为按需从注册表读取每个设备的驱动版本
+        return {}
+
+    def _get_driver_version_from_registry(self, pnp_device_id: str) -> str | None:
+        """从注册表读取指定设备的驱动版本（极快）"""
+        if not pnp_device_id:
+            return None
+        import winreg
+        try:
+            # 步骤 1：读取设备的 Driver 值（格式：{ClassGUID}\\InstanceID）
+            dev_key = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                rf"SYSTEM\CurrentControlSet\Enum\{pnp_device_id}"
+            )
+            try:
+                driver_path, _ = winreg.QueryValueEx(dev_key, "Driver")
+            except FileNotFoundError:
+                return None
+            finally:
+                winreg.CloseKey(dev_key)
+
+            # 步骤 2：从 Class 注册表键读取 DriverVersion
+            # driver_path 格式: "{4d36e96c-e325-11ce-bfc1-08002be10318}\0001"
+            class_key = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                rf"SYSTEM\CurrentControlSet\Control\Class\{driver_path}"
+            )
+            try:
+                version, _ = winreg.QueryValueEx(class_key, "DriverVersion")
+                return version.strip() if version else None
+            except FileNotFoundError:
+                return None
+            finally:
+                winreg.CloseKey(class_key)
+        except Exception:
+            return None
+
+    def _parse_device(self, device, driver_map: dict) -> dict:
         """解析单个音频设备"""
         name = device.Name or "未知音频设备"
         manufacturer = device.Manufacturer or ""
 
         # 判断位置（板载/GPU附带/USB外接）
         location = self._guess_location(name, manufacturer, device.PNPDeviceID)
+
+        # 驱动版本（从注册表读取，极快）
+        driver_version = self._get_driver_version_from_registry(
+            device.PNPDeviceID or ""
+        )
 
         # 状态
         status = device.Status or "未知"
@@ -50,6 +98,7 @@ class AudioCollector(BaseCollector):
             "名称": name,
             "厂商": manufacturer or None,
             "位置": location,
+            "驱动版本": driver_version,
             "状态": status,
         }
 

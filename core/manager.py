@@ -15,6 +15,7 @@ class CollectResult:
     errors: list[dict] = field(default_factory=list)  # [{"模块": "cpu", "错误": "..."}]
     warnings: list[str] = field(default_factory=list)  # ["磁盘SMART需管理员权限"]
     elapsed_seconds: float = 0.0                      # 总耗时
+    timings: dict = field(default_factory=dict)       # {"cpu": 0.35, "gpu": 1.2} 每模块耗时
 
 
 class CollectorManager:
@@ -76,10 +77,12 @@ class CollectorManager:
 
     def _collect_parallel(self, targets: list[BaseCollector], result: CollectResult) -> None:
         """并行采集"""
-        def _run_collector(collector: BaseCollector) -> dict:
+        def _run_collector(collector: BaseCollector) -> tuple[dict, float]:
             """在工作线程中执行采集，完成后清理 COM"""
+            t0 = time.perf_counter()
             try:
-                return collector.collect()
+                data = collector.collect()
+                return data, round(time.perf_counter() - t0, 3)
             finally:
                 from utils.wmi_helper import cleanup_com
                 cleanup_com()
@@ -93,10 +96,12 @@ class CollectorManager:
             for future in as_completed(future_map, timeout=self.TIMEOUT + 5):
                 collector = future_map[future]
                 try:
-                    data = future.result(timeout=self.TIMEOUT)
+                    data, elapsed = future.result(timeout=self.TIMEOUT)
                     result.data[collector.name] = data
+                    result.timings[collector.name] = elapsed
                 except FuturesTimeoutError:
                     result.errors.append({"模块": collector.name, "错误": "采集超时"})
+                    result.timings[collector.name] = self.TIMEOUT
                 except CollectorError as e:
                     result.errors.append({"模块": collector.name, "错误": str(e)})
                 except Exception as e:
@@ -105,13 +110,17 @@ class CollectorManager:
     def _collect_sequential(self, targets: list[BaseCollector], result: CollectResult) -> None:
         """顺序采集（调试用）"""
         for collector in targets:
+            t0 = time.perf_counter()
             try:
                 data = collector.collect()
                 result.data[collector.name] = data
+                result.timings[collector.name] = round(time.perf_counter() - t0, 3)
             except CollectorError as e:
                 result.errors.append({"模块": collector.name, "错误": str(e)})
+                result.timings[collector.name] = round(time.perf_counter() - t0, 3)
             except Exception as e:
                 result.errors.append({"模块": collector.name, "错误": f"未知错误: {e}"})
+                result.timings[collector.name] = round(time.perf_counter() - t0, 3)
 
     def _filter_collectors(
         self,

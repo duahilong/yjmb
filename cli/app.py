@@ -133,6 +133,10 @@ def run_cli(argv: list[str]) -> None:
     if args.debug:
         print(f"[DEBUG] 采集耗时: {result.elapsed_seconds}s (总耗时: {total_time:.2f}s)", file=sys.stderr)
         print(f"[DEBUG] 采集结果: {list(result.data.keys())}", file=sys.stderr)
+        if result.timings:
+            print(f"[DEBUG] 各模块耗时:", file=sys.stderr)
+            for name, elapsed in sorted(result.timings.items(), key=lambda x: -x[1]):
+                print(f"[DEBUG]   {name}: {elapsed:.3f}s", file=sys.stderr)
         if result.errors:
             print(f"[DEBUG] 错误: {result.errors}", file=sys.stderr)
         if result.warnings:
