@@ -18,15 +18,8 @@ def main():
         from cli.app import run_cli
         run_cli(sys.argv[1:])
     else:
-        # 第二阶段实现 GUI
-        print("HWInfo - Windows 硬件检测工具 v0.1.0")
-        print()
-        print("GUI 模式尚未实现，请使用命令行参数运行。")
-        print("用法: python main.py all")
-        print("      python main.py cpu gpu memory")
-        print("      python main.py all --json")
-        print("      python main.py --help")
-        sys.exit(1)
+        from gui.app import run_gui
+        run_gui()
 
     # 程序退出前清理 COM 对象，抑制 pythoncom C 扩展的 "Win32 exception" 消息
     # 这些消息是 COM 对象在解释器关闭时被 GC 释放产生的，不影响功能
