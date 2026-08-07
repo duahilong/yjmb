@@ -15,8 +15,12 @@ from PySide6.QtGui import QBrush, QColor, QFont
 from gui.pages.base_page import BasePage
 from gui.zoom import scaled
 from core.constants import (
-    ALL_CATEGORIES, CATEGORY_LABELS, BRIEF_FIELDS_MAP, ITEM_BRIEF_FIELDS_MAP,
+    CATEGORY_LABELS, BRIEF_FIELDS_MAP, ITEM_BRIEF_FIELDS_MAP,
 )
+
+
+# 总览页显示类别及顺序（不包含显示器）
+OVERVIEW_ORDER = ["os", "cpu", "motherboard", "memory", "gpu", "storage", "network", "audio"]
 
 
 class OverviewPage(BasePage):
@@ -69,7 +73,7 @@ class OverviewPage(BasePage):
         val_brush = QBrush(QColor("#333333"))
 
         row_count = 0
-        for cat in ALL_CATEGORIES:
+        for cat in OVERVIEW_ORDER:
             cat_data = data.get(cat)
             if cat_data is None:
                 continue
