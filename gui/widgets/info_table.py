@@ -4,7 +4,6 @@ gui/widgets/info_table.py - 键值对表格组件
 from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
 )
-from PySide6.QtCore import Qt
 
 
 class InfoTable(QTableWidget):

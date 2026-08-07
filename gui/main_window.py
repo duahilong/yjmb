@@ -2,28 +2,31 @@
 gui/main_window.py - 主窗口
 """
 from PySide6.QtWidgets import (
-    QMainWindow, QTreeWidget, QTreeWidgetItem,
+    QMainWindow, QListWidget, QListWidgetItem,
     QStackedWidget, QSplitter, QStatusBar, QToolBar,
     QLabel, QWidget, QVBoxLayout,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QAction
 
-from core.constants import ALL_CATEGORIES, ORDER_MAP
+from core.constants import ALL_CATEGORIES, CATEGORY_LABELS
 from core.manager import CollectResult
+from config.settings import Settings
 
 
-# 类别中文名映射
-CATEGORY_LABELS = {
-    "os": "操作系统",
-    "motherboard": "主板",
-    "cpu": "处理器",
-    "memory": "内存",
-    "gpu": "显卡",
-    "storage": "存储",
-    "network": "网络",
-    "audio": "音频",
-    "monitor": "显示器",
+# 导航图标（Unicode 符号）
+NAV_ICONS = {
+    "overview": "🏠",
+    "os": "💻",
+    "motherboard": "🔧",
+    "cpu": "⚡",
+    "memory": "📦",
+    "gpu": "🎮",
+    "storage": "💾",
+    "network": "🌐",
+    "audio": "🔊",
+    "monitor": "🖥️",
+    "settings": "⚙️",
 }
 
 
@@ -37,65 +40,71 @@ class MainWindow(QMainWindow):
 
         self._worker = None
         self._result: CollectResult | None = None
+        self._settings = Settings()
 
         self._setup_ui()
         self._setup_toolbar()
         self._setup_statusbar()
+
+        # 设置页保存后：重建导航 + 重新采集
+        self._settings_page.settings_saved.connect(self._on_settings_saved)
 
         # 启动后自动采集
         self._start_collect()
 
     def _setup_ui(self) -> None:
         """构建主界面布局"""
-        # 中心分割器：左侧树 + 右侧页面
+        # 中心分割器：左侧导航 + 右侧页面
         splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(0)  # 无可见分割线
 
-        # 左侧导航树
-        self._tree = QTreeWidget()
-        self._tree.setHeaderHidden(True)
-        self._tree.setMinimumWidth(160)
-        self._tree.setMaximumWidth(220)
+        # 左侧导航列表
+        self._nav = QListWidget()
+        self._nav.setObjectName("navList")
+        self._nav.setFixedWidth(180)
+        self._nav.setIconSize(QSize(20, 20))
+        self._nav.setSpacing(2)
 
-        # 右侧页面栈（先于树构建，避免信号触发时页面未就绪）
+        # 右侧页面栈（先于导航构建，避免信号触发时页面未就绪）
         self._stack = QStackedWidget()
         self._build_pages()
 
-        # 构建树并连接信号
-        self._build_tree()
-        self._tree.currentItemChanged.connect(self._on_tree_selection)
+        # 构建导航并连接信号
+        self._rebuild_nav()
+        self._nav.currentRowChanged.connect(self._on_nav_selection)
 
-        splitter.addWidget(self._tree)
+        splitter.addWidget(self._nav)
         splitter.addWidget(self._stack)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
 
         self.setCentralWidget(splitter)
 
-    def _build_tree(self) -> None:
-        """构建左侧导航树"""
-        # 总览节点
-        overview_item = QTreeWidgetItem(["总览"])
-        overview_item.setData(0, Qt.ItemDataRole.UserRole, "overview")
-        self._tree.addTopLevelItem(overview_item)
+    def _enabled_categories(self) -> list[str]:
+        """当前配置中启用的硬件类别（按 order 排序）"""
+        return [c for c in ALL_CATEGORIES if self._settings.is_display_enabled(c)]
 
-        # 硬件类别节点（按 order 排序）
-        hw_parent = QTreeWidgetItem(["硬件信息"])
-        hw_parent.setExpanded(True)
-        self._tree.addTopLevelItem(hw_parent)
+    def _rebuild_nav(self) -> None:
+        """构建左侧扁平导航列表（按当前显示配置过滤）"""
+        self._nav.blockSignals(True)
+        self._nav.clear()
+        self._nav_keys = []
 
-        for cat in ALL_CATEGORIES:
-            label = CATEGORY_LABELS.get(cat, cat)
-            item = QTreeWidgetItem([label])
-            item.setData(0, Qt.ItemDataRole.UserRole, cat)
-            hw_parent.addChild(item)
+        # 导航项顺序：总览 + 启用的硬件类别 + 设置
+        nav_items = [("overview", "总览")]
+        for cat in self._enabled_categories():
+            nav_items.append((cat, CATEGORY_LABELS.get(cat, cat)))
+        nav_items.append(("settings", "设置"))
 
-        # 设置节点
-        settings_item = QTreeWidgetItem(["设置"])
-        settings_item.setData(0, Qt.ItemDataRole.UserRole, "settings")
-        self._tree.addTopLevelItem(settings_item)
+        for key, label in nav_items:
+            icon_text = NAV_ICONS.get(key, "•")
+            item = QListWidgetItem(f"  {icon_text}  {label}")
+            item.setSizeHint(QSize(160, 38))
+            self._nav.addItem(item)
+            self._nav_keys.append(key)
 
-        # 默认选中总览
-        self._tree.setCurrentItem(overview_item)
+        self._nav.setCurrentRow(0)
+        self._nav.blockSignals(False)
 
     def _build_pages(self) -> None:
         """构建右侧页面栈"""
@@ -138,11 +147,11 @@ class MainWindow(QMainWindow):
         self._status_label = QLabel("就绪")
         self.statusBar().addWidget(self._status_label)
 
-    def _on_tree_selection(self, current: QTreeWidgetItem, _previous) -> None:
-        """树节点切换 → 切换右侧页面"""
-        if not current:
+    def _on_nav_selection(self, row: int) -> None:
+        """导航切换 → 切换右侧页面"""
+        if row < 0 or row >= len(self._nav_keys):
             return
-        key = current.data(0, Qt.ItemDataRole.UserRole)
+        key = self._nav_keys[row]
         if key == "overview":
             self._stack.setCurrentWidget(self._overview_page)
         elif key == "settings":
@@ -151,7 +160,7 @@ class MainWindow(QMainWindow):
             self._stack.setCurrentWidget(self._detail_pages[key])
 
     def _start_collect(self) -> None:
-        """启动后台采集"""
+        """启动后台采集（仅采集配置中启用的类别）"""
         if self._worker and self._worker.isRunning():
             return
 
@@ -160,9 +169,10 @@ class MainWindow(QMainWindow):
         self._refresh_action.setEnabled(False)
         self._status_label.setText("正在采集...")
 
-        self._worker = CollectWorker(parent=self)
+        self._worker = CollectWorker(categories=self._enabled_categories(), parent=self)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_collect_done)
+        self._worker.error.connect(self._on_collect_error)
         self._worker.start()
 
     def _on_progress(self, msg: str) -> None:
@@ -187,6 +197,24 @@ class MainWindow(QMainWindow):
 
         # 更新总览页
         self._overview_page.update_data(result.data)
+
+    def _on_collect_error(self, msg: str) -> None:
+        """采集线程异常兜底"""
+        self._refresh_action.setEnabled(True)
+        self._status_label.setText(f"采集失败: {msg}")
+
+    def _on_settings_saved(self) -> None:
+        """设置页保存后：重新加载配置、重建导航、重新采集"""
+        self._settings = Settings()
+        self._rebuild_nav()
+        self._start_collect()
+
+    def closeEvent(self, event) -> None:
+        """窗口关闭时安全停止后台采集线程"""
+        if self._worker and self._worker.isRunning():
+            self._worker.requestInterruption()
+            self._worker.wait(3000)
+        event.accept()
 
     def _export_json(self) -> None:
         """导出 JSON 到文件"""

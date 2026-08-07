@@ -11,6 +11,8 @@ class CollectWorker(QThread):
 
     # 采集完成信号，携带 CollectResult
     finished = Signal(object)
+    # 采集失败信号，携带错误信息
+    error = Signal(str)
     # 进度信号，携带当前状态文本
     progress = Signal(str)
 
@@ -20,24 +22,27 @@ class CollectWorker(QThread):
 
     def run(self) -> None:
         """在工作线程中执行采集"""
-        self.progress.emit("正在初始化采集...")
+        try:
+            self.progress.emit("正在初始化采集...")
 
-        # 加载所有 collector 模块（触发注册）
-        import collectors
-        collectors.load_all()
+            # 加载所有 collector 模块（触发注册）
+            import collectors
+            collectors.load_all()
 
-        from core.registry import get_all_collectors
+            from core.registry import get_all_collectors
 
-        manager = CollectorManager()
-        for c in get_all_collectors():
-            manager.register(c)
+            manager = CollectorManager()
+            for c in get_all_collectors():
+                manager.register(c)
 
-        self.progress.emit("正在采集硬件信息...")
+            self.progress.emit("正在采集硬件信息...")
 
-        result = manager.collect(
-            categories=self._categories,
-            parallel=True,
-        )
+            result = manager.collect(
+                categories=self._categories,
+                parallel=True,
+            )
 
-        self.progress.emit(f"采集完成，耗时 {result.elapsed_seconds}s")
-        self.finished.emit(result)
+            self.progress.emit(f"采集完成，耗时 {result.elapsed_seconds}s")
+            self.finished.emit(result)
+        except Exception as e:
+            self.error.emit(str(e))

@@ -156,3 +156,9 @@ def run_cli(argv: list[str]) -> None:
 
     output = formatter.render(result, brief=args.brief)
     print(output)
+
+    # 非管理员提示（仅终端模式，JSON 输出不污染数据）
+    if not args.json:
+        from utils.format_utils import is_admin
+        if not is_admin():
+            print("提示：以管理员运行可获取更完整的磁盘健康信息")

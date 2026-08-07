@@ -5,7 +5,7 @@ __pycache__/
 *.so
 *.egg-info/
 dist/
-build/
+build/hwinfo/
 *.egg
 
 # 虚拟环境

@@ -50,6 +50,7 @@ class DeviceCardList(QScrollArea):
         self.setFrameShape(QScrollArea.Shape.NoFrame)
 
         self._container = QWidget()
+        self._container.setStyleSheet("background-color: #f5f5f5;")
         self._layout = QVBoxLayout(self._container)
         self._layout.setSpacing(12)
         self._layout.addStretch()

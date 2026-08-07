@@ -27,6 +27,19 @@ ORDER_MAP = {
 # 所有可用的硬件类别（按 order 排序）
 ALL_CATEGORIES = sorted(ORDER_MAP.keys(), key=lambda k: ORDER_MAP[k])
 
+# 类别中文显示名（CLI/GUI 共用）
+CATEGORY_LABELS = {
+    "os": "操作系统",
+    "motherboard": "主板",
+    "cpu": "处理器",
+    "memory": "内存",
+    "gpu": "显卡",
+    "storage": "存储",
+    "network": "网络",
+    "audio": "音频",
+    "monitor": "显示器",
+}
+
 # brief 模式：顶层字段过滤
 BRIEF_FIELDS_MAP = {
     "os": ["系统名称", "版本号", "系统架构"],

@@ -6,28 +6,17 @@ import os
 from PySide6.QtWidgets import (
     QLabel, QCheckBox, QVBoxLayout, QGroupBox, QPushButton, QHBoxLayout,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 from gui.pages.base_page import BasePage
-from core.constants import ALL_CATEGORIES
-
-
-# 类别中文名
-CATEGORY_LABELS = {
-    "os": "操作系统",
-    "motherboard": "主板",
-    "cpu": "处理器",
-    "memory": "内存",
-    "gpu": "显卡",
-    "storage": "存储",
-    "network": "网络",
-    "audio": "音频",
-    "monitor": "显示器",
-}
+from core.constants import ALL_CATEGORIES, CATEGORY_LABELS
 
 
 class SettingsPage(BasePage):
     """设置页：控制各类别的显示/隐藏"""
+
+    # 设置保存成功信号（主窗口据此重建导航并重新采集）
+    settings_saved = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -111,6 +100,8 @@ class SettingsPage(BasePage):
                 yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
 
             self._status_label.setText("✓ 设置已保存")
+            self._status_label.setStyleSheet("color: green; margin-top: 8px;")
+            self.settings_saved.emit()
         except Exception as e:
             self._status_label.setText(f"✗ 保存失败: {e}")
             self._status_label.setStyleSheet("color: red; margin-top: 8px;")

@@ -9,24 +9,34 @@ import threading
 # 使用线程本地存储，每个线程拥有独立的 WMI 连接
 _thread_local = threading.local()
 
+# win32com 动态分发（Dispatch/GetObject）存在全局类型缓存，
+# 多线程并发首次初始化会触发竞态（"接口未知"/"参数错误"等间歇性 COM 错误），
+# 因此连接的首次创建需全局串行化。
+_init_lock = threading.Lock()
+
 
 def get_wmi():
     """获取当前线程的 root\\cimv2 WMI 连接（线程本地单例）"""
     if not hasattr(_thread_local, 'wmi_connection') or _thread_local.wmi_connection is None:
-        import pythoncom
-        import wmi
-        pythoncom.CoInitialize()
-        _thread_local.wmi_connection = wmi.WMI()
+        with _init_lock:
+            # 双重检查：等待锁期间可能已被本线程创建
+            if not hasattr(_thread_local, 'wmi_connection') or _thread_local.wmi_connection is None:
+                import pythoncom
+                import wmi
+                pythoncom.CoInitialize()
+                _thread_local.wmi_connection = wmi.WMI()
     return _thread_local.wmi_connection
 
 
 def get_wmi_root():
     """获取当前线程的 root\\wmi WMI 连接（用于显示器、SMART）"""
     if not hasattr(_thread_local, 'wmi_root') or _thread_local.wmi_root is None:
-        import pythoncom
-        import wmi
-        pythoncom.CoInitialize()
-        _thread_local.wmi_root = wmi.WMI(namespace="root\\wmi")
+        with _init_lock:
+            if not hasattr(_thread_local, 'wmi_root') or _thread_local.wmi_root is None:
+                import pythoncom
+                import wmi
+                pythoncom.CoInitialize()
+                _thread_local.wmi_root = wmi.WMI(namespace="root\\wmi")
     return _thread_local.wmi_root
 
 

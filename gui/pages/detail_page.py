@@ -7,7 +7,6 @@ gui/pages/detail_page.py - 通用硬件详情页
 - 纯列表（如 gpu、storage）→ DeviceCardList 多设备卡片
 """
 from PySide6.QtWidgets import QLabel, QScrollArea, QWidget, QVBoxLayout
-from PySide6.QtCore import Qt
 
 from gui.pages.base_page import BasePage
 from gui.widgets.info_table import InfoTable
@@ -46,8 +45,10 @@ class DetailPage(BasePage):
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         self._content = QWidget()
+        self._content.setStyleSheet("background-color: #f5f5f5;")
         self._content_layout = QVBoxLayout(self._content)
-        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setContentsMargins(4, 4, 4, 4)
+        self._content_layout.setSpacing(12)
         self._content_layout.addStretch()
         self._scroll.setWidget(self._content)
         self._layout.addWidget(self._scroll)
