@@ -1,10 +1,12 @@
 """
 gui/main_window.py - 主窗口
 """
+import os
+
 from PySide6.QtWidgets import (
     QMainWindow, QListWidget, QListWidgetItem,
     QStackedWidget, QSplitter, QStatusBar, QToolBar,
-    QLabel, QWidget, QVBoxLayout,
+    QLabel, QWidget, QVBoxLayout, QToolButton,
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QAction
@@ -12,6 +14,10 @@ from PySide6.QtGui import QAction
 from core.constants import ALL_CATEGORIES, CATEGORY_LABELS
 from core.manager import CollectResult
 from config.settings import Settings
+from gui.app import resource_path
+from gui.zoom import (
+    ZOOM_MIN, ZOOM_MAX, ZOOM_STEP, scaled, scale_qss, set_zoom,
+)
 
 
 # 导航图标（Unicode 符号）
@@ -29,6 +35,10 @@ NAV_ICONS = {
     "settings": "⚙️",
 }
 
+# 导航尺寸基准（缩放系数为 1.0 时的值）
+NAV_WIDTH = 180
+NAV_ITEM_HEIGHT = 38
+
 
 class MainWindow(QMainWindow):
     """HWInfo 主窗口"""
@@ -41,10 +51,14 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._result: CollectResult | None = None
         self._settings = Settings()
+        self._zoom = 1.0  # 不持久化，每次启动恢复默认
 
         self._setup_ui()
         self._setup_toolbar()
         self._setup_statusbar()
+
+        # 应用默认缩放（100%）：确保 QSS 与固定尺寸初始一致
+        self._apply_zoom(1.0)
 
         # 设置页保存后：重建导航 + 重新采集
         self._settings_page.settings_saved.connect(self._on_settings_saved)
@@ -61,9 +75,9 @@ class MainWindow(QMainWindow):
         # 左侧导航列表
         self._nav = QListWidget()
         self._nav.setObjectName("navList")
-        self._nav.setFixedWidth(180)
-        self._nav.setIconSize(QSize(20, 20))
-        self._nav.setSpacing(2)
+        self._nav.setFixedWidth(scaled(NAV_WIDTH))
+        self._nav.setIconSize(QSize(scaled(20), scaled(20)))
+        self._nav.setSpacing(scaled(2))
 
         # 右侧页面栈（先于导航构建，避免信号触发时页面未就绪）
         self._stack = QStackedWidget()
@@ -84,8 +98,17 @@ class MainWindow(QMainWindow):
         """当前配置中启用的硬件类别（按 order 排序）"""
         return [c for c in ALL_CATEGORIES if self._settings.is_display_enabled(c)]
 
+    def _current_nav_key(self) -> str | None:
+        """当前选中的导航项 key"""
+        row = self._nav.currentRow()
+        if 0 <= row < len(self._nav_keys):
+            return self._nav_keys[row]
+        return None
+
     def _rebuild_nav(self) -> None:
         """构建左侧扁平导航列表（按当前显示配置过滤）"""
+        current_key = self._current_nav_key()
+
         self._nav.blockSignals(True)
         self._nav.clear()
         self._nav_keys = []
@@ -99,11 +122,15 @@ class MainWindow(QMainWindow):
         for key, label in nav_items:
             icon_text = NAV_ICONS.get(key, "•")
             item = QListWidgetItem(f"  {icon_text}  {label}")
-            item.setSizeHint(QSize(160, 38))
+            item.setSizeHint(QSize(scaled(NAV_WIDTH - 20), scaled(NAV_ITEM_HEIGHT)))
             self._nav.addItem(item)
             self._nav_keys.append(key)
 
-        self._nav.setCurrentRow(0)
+        # 恢复之前的选中页（缩放重建时保持当前页面）
+        if current_key in self._nav_keys:
+            self._nav.setCurrentRow(self._nav_keys.index(current_key))
+        else:
+            self._nav.setCurrentRow(0)
         self._nav.blockSignals(False)
 
     def _build_pages(self) -> None:
@@ -143,9 +170,44 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self._export_action)
 
     def _setup_statusbar(self) -> None:
-        """状态栏"""
+        """状态栏：左侧缩放控制（− / 百分比 / +），右侧状态信息"""
         self._status_label = QLabel("就绪")
         self.statusBar().addWidget(self._status_label)
+
+        # 左下角缩放控制
+        self._zoom_out_btn = QToolButton()
+        self._zoom_out_btn.setText("-")
+        self._zoom_out_btn.setToolTip("缩小界面 (Ctrl+-)")
+        self._zoom_out_btn.clicked.connect(lambda: self._zoom_by(-ZOOM_STEP))
+
+        self._zoom_label = QLabel("100%")
+        self._zoom_label.setObjectName("zoomLabel")
+        self._zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._zoom_in_btn = QToolButton()
+        self._zoom_in_btn.setText("+")
+        self._zoom_in_btn.setToolTip("放大界面 (Ctrl+=)")
+        self._zoom_in_btn.clicked.connect(lambda: self._zoom_by(ZOOM_STEP))
+
+        self.statusBar().addWidget(self._zoom_out_btn)
+        self.statusBar().addWidget(self._zoom_label)
+        self.statusBar().addWidget(self._zoom_in_btn)
+
+        # 快捷键：Ctrl+= 放大 / Ctrl+- 缩小 / Ctrl+0 恢复默认
+        zoom_in_action = QAction("放大界面", self)
+        zoom_in_action.setShortcut("Ctrl+=")
+        zoom_in_action.triggered.connect(lambda: self._zoom_by(ZOOM_STEP))
+        self.addAction(zoom_in_action)
+
+        zoom_out_action = QAction("缩小界面", self)
+        zoom_out_action.setShortcut("Ctrl+-")
+        zoom_out_action.triggered.connect(lambda: self._zoom_by(-ZOOM_STEP))
+        self.addAction(zoom_out_action)
+
+        reset_zoom_action = QAction("恢复默认缩放", self)
+        reset_zoom_action.setShortcut("Ctrl+0")
+        reset_zoom_action.triggered.connect(self._reset_zoom)
+        self.addAction(reset_zoom_action)
 
     def _on_nav_selection(self, row: int) -> None:
         """导航切换 → 切换右侧页面"""
@@ -208,6 +270,60 @@ class MainWindow(QMainWindow):
         self._settings = Settings()
         self._rebuild_nav()
         self._start_collect()
+
+    # ========================================================
+    # 界面缩放控制
+    # ========================================================
+
+    def _zoom_by(self, delta: float) -> None:
+        """按步进调整缩放系数"""
+        new_zoom = round((self._zoom + delta) * 10) / 10
+        new_zoom = min(ZOOM_MAX, max(ZOOM_MIN, new_zoom))
+        self._apply_zoom(new_zoom)
+
+    def _reset_zoom(self) -> None:
+        """恢复默认缩放（100%）"""
+        self._apply_zoom(1.0)
+
+    def _apply_zoom(self, zoom: float) -> None:
+        """应用缩放：全局 QSS + Python 侧固定尺寸同步换算，保持布局协调"""
+        self._zoom = zoom
+        set_zoom(zoom)
+
+        # 1. 全局 QSS 重新生成（字体、间距、控件尺寸全部按比例缩放）
+        qss_text = self._load_base_qss()
+        app = self._app()
+        if qss_text:
+            app.setStyleSheet(scale_qss(qss_text, zoom))
+
+        # 2. Python 侧固定尺寸
+        self._nav.setFixedWidth(scaled(NAV_WIDTH))
+        self._nav.setIconSize(QSize(scaled(20), scaled(20)))
+        self._nav.setSpacing(scaled(2))
+        self._rebuild_nav()
+
+        # 3. 总览表格按新尺寸重渲染（行高/列宽随缩放）
+        if self._result:
+            self._overview_page.update_data(self._result.data)
+
+        # 4. 状态栏显示与边界
+        self._zoom_label.setText(f"{int(round(zoom * 100))}%")
+        self._zoom_out_btn.setEnabled(zoom > ZOOM_MIN)
+        self._zoom_in_btn.setEnabled(zoom < ZOOM_MAX)
+
+    @staticmethod
+    def _app():
+        """获取当前 QApplication 实例"""
+        from PySide6.QtWidgets import QApplication
+        return QApplication.instance()
+
+    def _load_base_qss(self) -> str:
+        """读取原始 QSS 文本（打包环境经 _MEIPASS 定位）"""
+        qss_path = resource_path(os.path.join("gui", "resources", "style.qss"))
+        if os.path.exists(qss_path):
+            with open(qss_path, "r", encoding="utf-8") as f:
+                return f.read()
+        return ""
 
     def closeEvent(self, event) -> None:
         """窗口关闭时安全停止后台采集线程"""

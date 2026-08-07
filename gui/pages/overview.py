@@ -6,13 +6,14 @@ gui/pages/overview.py - 总览页（配置清单）
     处理器  Genuine Intel(R) 0000 | 24 | 24 | 1690 MHz
 """
 from PySide6.QtWidgets import (
-    QLabel, QScrollArea, QWidget, QVBoxLayout,
+    QScrollArea, QWidget, QVBoxLayout,
     QTreeWidget, QTreeWidgetItem, QHeaderView, QAbstractItemView,
 )
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QBrush, QColor, QFont
 
 from gui.pages.base_page import BasePage
+from gui.zoom import scaled
 from core.constants import (
     ALL_CATEGORIES, CATEGORY_LABELS, BRIEF_FIELDS_MAP, ITEM_BRIEF_FIELDS_MAP,
 )
@@ -24,9 +25,7 @@ class OverviewPage(BasePage):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        title = QLabel("配置概览")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 8px;")
-        self._layout.addWidget(title)
+        title = self._make_title("配置概览")
 
         # 可滚动内容区
         self._scroll = QScrollArea()
@@ -61,7 +60,7 @@ class OverviewPage(BasePage):
         # 类别列固定宽度，摘要列拉伸（不依赖 ResizeToContents，隐藏表头时不可靠）
         table.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         table.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        table.setColumnWidth(0, 90)
+        table.setColumnWidth(0, scaled(90))
 
         # 样式：类别名蓝色加粗，摘要深灰
         cat_font = QFont()
@@ -83,7 +82,7 @@ class OverviewPage(BasePage):
                 # 同类别多行时，只在第一行显示类别名
                 label = CATEGORY_LABELS.get(cat, cat) if idx == 0 else ""
                 item = QTreeWidgetItem([label, line])
-                item.setSizeHint(0, QSize(0, 32))
+                item.setSizeHint(0, QSize(0, scaled(32)))
                 item.setForeground(1, val_brush)
                 if idx == 0:
                     item.setFont(0, cat_font)
@@ -96,7 +95,7 @@ class OverviewPage(BasePage):
             return
 
         # 表格高度 = 行数 × 行高，避免内部滚动条
-        table.setFixedHeight(row_count * 32 + 8)
+        table.setFixedHeight(row_count * scaled(32) + scaled(8))
         self._content_layout.insertWidget(0, table)
 
     # ========================================================

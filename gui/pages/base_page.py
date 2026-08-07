@@ -17,6 +17,13 @@ class BasePage(QWidget):
         """子类重写：接收数据并刷新 UI"""
         raise NotImplementedError
 
+    def _make_title(self, text: str) -> QLabel:
+        """创建页面标题（样式统一由全局 QSS #pageTitle 控制，随缩放同步）"""
+        label = QLabel(text)
+        label.setObjectName("pageTitle")
+        self._layout.addWidget(label)
+        return label
+
     def _clear_layout(self) -> None:
         """清空当前布局中的所有组件"""
         while self._layout.count():
@@ -38,8 +45,8 @@ class BasePage(QWidget):
                 self._clear_sub_layout(item.layout())
 
     def _make_placeholder(self, text: str = "暂无数据") -> QLabel:
-        """创建占位提示标签"""
+        """创建占位提示标签（样式由全局 QSS #placeholder 控制）"""
         label = QLabel(text)
+        label.setObjectName("placeholder")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("color: #888; font-size: 14px; padding: 40px;")
         return label

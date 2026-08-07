@@ -35,10 +35,8 @@ class DetailPage(BasePage):
         self._category = category
         self._label = label
 
-        # 标题
-        title = QLabel(label)
-        title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 8px;")
-        self._layout.addWidget(title)
+        # 标题（样式由全局 QSS #pageTitle 控制）
+        title = self._make_title(label)
 
         # 内容区（可滚动）
         self._scroll = QScrollArea()
@@ -92,7 +90,7 @@ class DetailPage(BasePage):
         # 列表部分 → DeviceCardList
         for key, items in list_fields.items():
             section_label = QLabel(f"▎{key}")
-            section_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 12px;")
+            section_label.setObjectName("sectionTitle")
             self._content_layout.addWidget(section_label)
 
             card_list = DeviceCardList()

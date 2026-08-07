@@ -1,4 +1,4 @@
-"""
+﻿"""
 gui/pages/settings.py - 设置页（显示控制）
 """
 import os
@@ -21,9 +21,7 @@ class SettingsPage(BasePage):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        title = QLabel("设置")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 8px;")
-        self._layout.addWidget(title)
+        title = self._make_title("设置")
 
         # 显示控制分组
         group = QGroupBox("显示控制")
@@ -53,7 +51,8 @@ class SettingsPage(BasePage):
         self._layout.addLayout(btn_layout)
 
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet("color: green; margin-top: 8px;")
+        self._status_label.setObjectName("statusLabel")
+        self._status_label.setStyleSheet("color: green;")
         self._layout.addWidget(self._status_label)
 
         self._layout.addStretch()
@@ -100,15 +99,15 @@ class SettingsPage(BasePage):
                 yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
 
             self._status_label.setText("✓ 设置已保存")
-            self._status_label.setStyleSheet("color: green; margin-top: 8px;")
+            self._status_label.setStyleSheet("color: green;")
             self.settings_saved.emit()
         except Exception as e:
             self._status_label.setText(f"✗ 保存失败: {e}")
-            self._status_label.setStyleSheet("color: red; margin-top: 8px;")
+            self._status_label.setStyleSheet("color: red;")
 
     def _reset_defaults(self) -> None:
         """恢复默认（全部显示）"""
         for cb in self._checkboxes.values():
             cb.setChecked(True)
         self._status_label.setText("已恢复默认（需点击保存生效）")
-        self._status_label.setStyleSheet("color: green; margin-top: 8px;")
+        self._status_label.setStyleSheet("color: green;")
