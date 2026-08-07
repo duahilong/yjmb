@@ -9,7 +9,10 @@ a = Analysis(
     [os.path.join(_ROOT, 'main.py')],
     pathex=[_ROOT],
     binaries=[],
-    datas=[(os.path.join(_ROOT, 'data', 'pci.ids'), 'data')],
+    datas=[
+        (os.path.join(_ROOT, 'data', 'pci.ids'), 'data'),
+        (os.path.join(_ROOT, 'gui', 'resources'), os.path.join('gui', 'resources')),
+    ],
     hiddenimports=[
         'wmi',
         'pythoncom',
