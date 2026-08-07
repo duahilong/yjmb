@@ -185,6 +185,8 @@ class OverviewPage(BasePage):
             return f"{int(value)} 线程"
         if field == "已用插槽" and isinstance(value, (int, float)):
             return f"{int(value)} 插槽"
+        if field == "CL" and isinstance(value, (int, float)):
+            return f"CL{int(value)}"
         # 频率：内存保留 MHz，CPU 类换算为 GHz
         if field.endswith("_MHz") and isinstance(value, (int, float)):
             if cat != "memory" and value >= 1000:

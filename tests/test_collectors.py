@@ -186,6 +186,21 @@ class TestMemoryCollector:
         assert result["内存条"][0]["频率_MHz"] == 6000
         assert result["内存条"][0]["电压_V"] == 1.35
 
+    def test_parse_cl(self):
+        """CL 值从型号字符串解析（含各种厂商格式）"""
+        from collectors.memory import MemoryCollector
+        collector = MemoryCollector()
+
+        # "CL36-44-44 D5-7200" 等显式格式 → 解析出 CL
+        assert collector._parse_cl("CL36-44-44 D5-7200") == 36
+        assert collector._parse_cl("CL30-40-40 96") == 30
+        assert collector._parse_cl("cl28-34-34") == 28
+        # 不含显式 CL 的厂商型号 → None（不误报）
+        assert collector._parse_cl("F5-7200J3646G24GX2-TZ5RK") is None
+        assert collector._parse_cl("M378A1G43EB1") is None
+        assert collector._parse_cl("") is None
+        assert collector._parse_cl(None) is None
+
 
 # ============================================================
 # Audio 模块

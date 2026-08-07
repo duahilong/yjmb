@@ -55,7 +55,7 @@ BRIEF_FIELDS_MAP = {
 
 # brief 模式：列表型数据中每个项的字段过滤
 ITEM_BRIEF_FIELDS_MAP = {
-    "memory": ["插槽", "容量_GB", "类型", "频率_MHz"],
+    "memory": ["插槽", "厂商", "容量_GB", "类型", "频率_MHz", "CL"],
     "gpu": ["名称", "显存_MB", "驱动版本"],
     "storage": ["型号", "类型", "容量_GB"],
     "network": ["名称", "状态", "IPv4"],

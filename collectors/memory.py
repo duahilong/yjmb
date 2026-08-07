@@ -1,6 +1,8 @@
 """
 collectors/memory.py - 内存信息采集
 """
+import re
+
 from core.base import BaseCollector, CollectorError
 from core.registry import register_collector
 from utils.wmi_helper import get_wmi
@@ -89,13 +91,15 @@ class MemoryCollector(BaseCollector):
         # 构建每条内存的信息
         memory_sticks = []
         for stick in sticks:
+            part_number = (stick.PartNumber or "").strip()
             stick_info = {
                 "插槽": stick.DeviceLocator or None,
                 "厂商": (stick.Manufacturer or "").strip() or None,
-                "型号": (stick.PartNumber or "").strip() or None,
+                "型号": part_number or None,
                 "容量_GB": bytes_to_gb(int(stick.Capacity)) if stick.Capacity else None,
                 "类型": _MEMORY_TYPE_MAP.get(stick.SMBIOSMemoryType, f"类型{stick.SMBIOSMemoryType}"),
                 "频率_MHz": stick.Speed or None,
+                "CL": self._parse_cl(part_number),
                 "位宽_bit": stick.DataWidth or None,
                 "电压_V": millivolts_to_volts(stick.ConfiguredVoltage) if stick.ConfiguredVoltage else None,
                 "序列号": (stick.SerialNumber or "").strip() or None,
@@ -122,6 +126,23 @@ class MemoryCollector(BaseCollector):
 
     def get_brief_fields(self) -> list[str]:
         return ["总容量_GB", "已用插槽"]
+
+    @staticmethod
+    def _parse_cl(part_number: str) -> int | None:
+        """
+        从型号字符串解析 CL 值。
+
+        常见格式：
+        - "CL36-44-44 D5-7200" → 36
+        - "F5-7200J3646G24GX2-TZ5RK"（部分厂商型号不含显式 CL）→ None
+        """
+        if not part_number:
+            return None
+        # 优先匹配 "CL36" 这类显式写法（大小写不敏感）
+        m = re.search(r"CL\s*(\d+)", part_number, re.IGNORECASE)
+        if m:
+            return int(m.group(1))
+        return None
 
     def _guess_channel_mode(self, stick_count: int, total_slots: int | None) -> str:
         """根据内存条数推断通道模式"""
