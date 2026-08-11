@@ -4,6 +4,7 @@ collectors/audio.py - 音频设备信息采集
 from core.base import BaseCollector, CollectorError
 from core.registry import register_collector
 from utils.wmi_helper import get_wmi
+from utils.registry import get_driver_version as _reg_get_driver_version
 
 
 @register_collector
@@ -43,38 +44,8 @@ class AudioCollector(BaseCollector):
         return {}
 
     def _get_driver_version_from_registry(self, pnp_device_id: str) -> str | None:
-        """从注册表读取指定设备的驱动版本（极快）"""
-        if not pnp_device_id:
-            return None
-        import winreg
-        try:
-            # 步骤 1：读取设备的 Driver 值（格式：{ClassGUID}\\InstanceID）
-            dev_key = winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                rf"SYSTEM\CurrentControlSet\Enum\{pnp_device_id}"
-            )
-            try:
-                driver_path, _ = winreg.QueryValueEx(dev_key, "Driver")
-            except FileNotFoundError:
-                return None
-            finally:
-                winreg.CloseKey(dev_key)
-
-            # 步骤 2：从 Class 注册表键读取 DriverVersion
-            # driver_path 格式: "{4d36e96c-e325-11ce-bfc1-08002be10318}\0001"
-            class_key = winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                rf"SYSTEM\CurrentControlSet\Control\Class\{driver_path}"
-            )
-            try:
-                version, _ = winreg.QueryValueEx(class_key, "DriverVersion")
-                return version.strip() if version else None
-            except FileNotFoundError:
-                return None
-            finally:
-                winreg.CloseKey(class_key)
-        except Exception:
-            return None
+        """从注册表读取指定设备的驱动版本（极快，逻辑见 utils/registry.py）"""
+        return _reg_get_driver_version(pnp_device_id)
 
     def _parse_device(self, device, driver_map: dict) -> dict:
         """解析单个音频设备"""

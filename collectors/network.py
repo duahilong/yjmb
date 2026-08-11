@@ -5,6 +5,7 @@ from core.base import BaseCollector, CollectorError
 from core.registry import register_collector
 from utils.wmi_helper import get_wmi
 from utils.format_utils import bps_to_gbps
+from utils.registry import get_driver_version
 
 
 @register_collector
@@ -107,6 +108,7 @@ class NetworkCollector(BaseCollector):
             "IPv4": ipv4,
             "子网掩码": subnet,
             "网关": gateway,
+            "驱动版本": get_driver_version(adapter.PNPDeviceID or ""),
         }
 
         # 无线额外信息
