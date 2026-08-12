@@ -46,7 +46,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("HWInfo - Windows 硬件检测工具")
-        self.resize(1000, 700)
+        # 默认窗口尺寸（基准 1000x700，随缩放系数放大，120% 时为 1200x840）
+        self.resize(scaled(1000), scaled(700))
 
         self._worker = None
         self._result: CollectResult | None = None
