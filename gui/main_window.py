@@ -51,14 +51,14 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._result: CollectResult | None = None
         self._settings = Settings()
-        self._zoom = 1.0  # 不持久化，每次启动恢复默认
+        self._zoom = 1.2  # 默认 120%，不持久化，每次启动恢复默认
 
         self._setup_ui()
         self._setup_toolbar()
         self._setup_statusbar()
 
-        # 应用默认缩放（100%）：确保 QSS 与固定尺寸初始一致
-        self._apply_zoom(1.0)
+        # 应用默认缩放（120%）：确保 QSS 与固定尺寸初始一致
+        self._apply_zoom(1.2)
 
         # 设置页保存后：重建导航 + 重新采集
         self._settings_page.settings_saved.connect(self._on_settings_saved)
@@ -282,8 +282,8 @@ class MainWindow(QMainWindow):
         self._apply_zoom(new_zoom)
 
     def _reset_zoom(self) -> None:
-        """恢复默认缩放（100%）"""
-        self._apply_zoom(1.0)
+        """恢复默认缩放（120%）"""
+        self._apply_zoom(1.2)
 
     def _apply_zoom(self, zoom: float) -> None:
         """应用缩放：全局 QSS + Python 侧固定尺寸同步换算，保持布局协调"""

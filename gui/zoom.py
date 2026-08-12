@@ -16,8 +16,8 @@ ZOOM_STEP = 0.1
 # 匹配 "Npx" / "N.Npx"（不影响颜色、百分比、无单位值）
 _PX_RE = re.compile(r"(\d+(?:\.\d+)?)px")
 
-# 当前全局缩放系数（模块级，进程内共享）
-_current_zoom = 1.0
+# 当前全局缩放系数（模块级，进程内共享；程序重启后恢复默认 1.2）
+_current_zoom = 1.2
 
 
 def set_zoom(zoom: float) -> None:
