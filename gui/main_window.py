@@ -46,6 +46,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("HWInfo - Windows 硬件检测工具")
+        # 始终置顶显示（浮于其他窗口之上）
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         # 默认窗口尺寸（基准 1000x700，随缩放系数放大，120% 时为 1200x840）
         self.resize(scaled(1000), scaled(700))
 
