@@ -5,6 +5,12 @@ import subprocess
 import json
 
 
+def _no_window_flags() -> int:
+    """Windows 下禁止子进程创建控制台窗口（避免 GUI 程序启动时闪现黑窗口）；
+    非 Windows 平台返回 0（无该标志）。"""
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 def run_powershell(command: str, timeout: int = 10) -> str:
     """
     执行 PowerShell 命令，返回 stdout 文本。
@@ -27,6 +33,7 @@ def run_powershell(command: str, timeout: int = 10) -> str:
         timeout=timeout,
         encoding="utf-8",
         errors="replace",
+        creationflags=_no_window_flags(),
     )
     if result.returncode != 0:
         raise subprocess.CalledProcessError(
@@ -65,6 +72,7 @@ def run_command(command: list[str], timeout: int = 10) -> str:
         timeout=timeout,
         encoding="utf-8",
         errors="replace",
+        creationflags=_no_window_flags(),
     )
     if result.returncode != 0:
         raise subprocess.CalledProcessError(
