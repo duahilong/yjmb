@@ -4,6 +4,9 @@ gui/worker.py - 后台采集线程
 from PySide6.QtCore import QThread, Signal
 
 from core.manager import CollectorManager, CollectResult
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class CollectWorker(QThread):
@@ -45,4 +48,5 @@ class CollectWorker(QThread):
             self.progress.emit(f"采集完成，耗时 {result.elapsed_seconds}s")
             self.finished.emit(result)
         except Exception as e:
+            logger.exception("后台采集线程异常")
             self.error.emit(str(e))

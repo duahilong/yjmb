@@ -84,9 +84,9 @@ class SettingsPage(BasePage):
             for cat, cb in self._checkboxes.items():
                 display_config[cat] = cb.isChecked()
 
-            # 读取现有配置或创建新的
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            config_path = os.path.join(project_root, "config.yaml")
+            # 读取现有配置或创建新的（打包模式下写入 EXE 同目录，避免 _MEIPASS 临时目录丢失）
+            from config.settings import get_user_config_path
+            config_path = get_user_config_path()
 
             config = {}
             if os.path.exists(config_path):

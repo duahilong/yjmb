@@ -6,6 +6,23 @@ from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 
 from core.base import BaseCollector, CollectorError
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+# 模块级共享线程池（进程内复用，避免每次采集新建线程；daemon 线程，
+# 进程退出时自动结束，不阻塞退出）
+_executor: ThreadPoolExecutor | None = None
+
+
+def _get_shared_executor(max_workers: int) -> ThreadPoolExecutor:
+    """获取全局共享线程池（首次创建后复用）"""
+    global _executor
+    if _executor is None:
+        _executor = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="hwinfo-collect"
+        )
+    return _executor
 
 
 @dataclass
@@ -87,12 +104,13 @@ class CollectorManager:
                 from utils.wmi_helper import cleanup_com
                 cleanup_com()
 
-        with ThreadPoolExecutor(max_workers=len(targets)) as executor:
-            future_map = {
-                executor.submit(_run_collector, collector): collector
-                for collector in targets
-            }
+        executor = _get_shared_executor(len(targets))
+        future_map = {
+            executor.submit(_run_collector, collector): collector
+            for collector in targets
+        }
 
+        try:
             for future in as_completed(future_map, timeout=self.TIMEOUT + 5):
                 collector = future_map[future]
                 try:
@@ -102,10 +120,21 @@ class CollectorManager:
                 except FuturesTimeoutError:
                     result.errors.append({"模块": collector.name, "错误": "采集超时"})
                     result.timings[collector.name] = self.TIMEOUT
+                    logger.warning("模块 %s 采集超时", collector.name)
                 except CollectorError as e:
                     result.errors.append({"模块": collector.name, "错误": str(e)})
+                    logger.warning("模块 %s 采集失败: %s", collector.name, e)
                 except Exception as e:
                     result.errors.append({"模块": collector.name, "错误": f"未知错误: {e}"})
+                    logger.exception("模块 %s 采集异常", collector.name)
+        except FuturesTimeoutError:
+            # as_completed 总超时兜底：WMI COM 调用可能无限阻塞，
+            # 整体超时后将未完成模块标记为超时，避免整个采集抛异常
+            logger.error("并行采集整体超时(%ss)，未完成模块标记为超时", self.TIMEOUT + 5)
+            for collector in future_map.values():
+                if collector.name not in result.data:
+                    result.errors.append({"模块": collector.name, "错误": "采集超时"})
+                    result.timings[collector.name] = self.TIMEOUT
 
     def _collect_sequential(self, targets: list[BaseCollector], result: CollectResult) -> None:
         """顺序采集（调试用）"""
@@ -118,9 +147,11 @@ class CollectorManager:
             except CollectorError as e:
                 result.errors.append({"模块": collector.name, "错误": str(e)})
                 result.timings[collector.name] = round(time.perf_counter() - t0, 3)
+                logger.warning("模块 %s 采集失败: %s", collector.name, e)
             except Exception as e:
                 result.errors.append({"模块": collector.name, "错误": f"未知错误: {e}"})
                 result.timings[collector.name] = round(time.perf_counter() - t0, 3)
+                logger.exception("模块 %s 采集异常", collector.name)
 
     def _filter_collectors(
         self,

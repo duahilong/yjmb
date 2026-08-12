@@ -14,15 +14,24 @@ def main():
     from utils.format_utils import force_utf8_stdout
     force_utf8_stdout()
 
+    # 初始化日志（CLI --debug 时输出 DEBUG 级）
+    from utils.logger import setup_logging
+    setup_logging(debug="--debug" in sys.argv)
+
     if len(sys.argv) > 1:
         from cli.app import run_cli
         run_cli(sys.argv[1:])
     else:
         from gui.app import run_gui
         run_gui()
+        # 仅 GUI 模式抑制 COM 噪音（CLI 模式保留 stderr，避免吞掉 --debug 输出）
+        _suppress_com_noise()
 
-    # 程序退出前清理 COM 对象，抑制 pythoncom C 扩展的 "Win32 exception" 消息
-    # 这些消息是 COM 对象在解释器关闭时被 GC 释放产生的，不影响功能
+
+def _suppress_com_noise() -> None:
+    """程序退出前清理 COM 对象，并将 stderr 重定向到 devnull，抑制
+    pythoncom C 扩展在解释器关闭时产生的 "Win32 exception" 消息。
+    这些消息是 COM 对象被 GC 释放产生的，不影响功能。"""
     import gc
     gc.collect()
     gc.collect()

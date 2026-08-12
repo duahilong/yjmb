@@ -6,6 +6,28 @@ from core.registry import register_collector
 from utils.wmi_helper import get_wmi, parse_wmi_date_only
 from utils.format_utils import bytes_to_mb
 
+# pynvml 可用性缓存（避免无 N 卡机器每次采集都重复 import/init）
+_NVML: object | None = None       # pynvml 模块引用（None=不可用）
+_NVML_CHECKED = False             # 是否已检测过可用性
+
+
+def _get_nvml():
+    """获取 pynvml 模块（首次调用检测，结果缓存）"""
+    global _NVML, _NVML_CHECKED
+    if _NVML_CHECKED:
+        return _NVML
+    _NVML_CHECKED = True
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            import pynvml
+        pynvml.nvmlInit()
+        _NVML = pynvml
+    except Exception:
+        _NVML = None
+    return _NVML
+
 
 @register_collector
 class GPUCollector(BaseCollector):
@@ -111,38 +133,33 @@ class GPUCollector(BaseCollector):
 
     def _enrich_nvidia_data(self, gpu_list: list[dict]) -> None:
         """尝试用 pynvml 补充 NVIDIA 显卡的实时数据"""
+        nvml = _get_nvml()
+        if nvml is None:
+            return
+
         try:
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", FutureWarning)
-                import pynvml
-                pynvml.nvmlInit()
-                device_count = pynvml.nvmlDeviceGetCount()
+            device_count = nvml.nvmlDeviceGetCount()
 
-                nvidia_gpus = [g for g in gpu_list if "nvidia" in (g.get("厂商") or "").lower()]
+            nvidia_gpus = [g for g in gpu_list if "nvidia" in (g.get("厂商") or "").lower()]
 
-                for i in range(min(device_count, len(nvidia_gpus))):
-                    handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+            for i in range(min(device_count, len(nvidia_gpus))):
+                handle = nvml.nvmlDeviceGetHandleByIndex(i)
 
-                    # GPU 利用率
-                    try:
-                        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-                        nvidia_gpus[i]["负载_百分比"] = util.gpu
-                    except Exception:
-                        pass
+                # GPU 利用率
+                try:
+                    util = nvml.nvmlDeviceGetUtilizationRates(handle)
+                    nvidia_gpus[i]["负载_百分比"] = util.gpu
+                except Exception:
+                    pass
 
-                    # 显存使用
-                    try:
-                        mem_info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-                        nvidia_gpus[i]["显存使用_MB"] = round(mem_info.used / (1024 ** 2))
-                        # 如果 WMI 显存数据异常，用 pynvml 的总量替代
-                        if not nvidia_gpus[i]["显存_MB"]:
-                            nvidia_gpus[i]["显存_MB"] = round(mem_info.total / (1024 ** 2))
-                    except Exception:
-                        pass
-
-                pynvml.nvmlShutdown()
-        except ImportError:
-            pass  # pynvml 未安装，跳过
+                # 显存使用
+                try:
+                    mem_info = nvml.nvmlDeviceGetMemoryInfo(handle)
+                    nvidia_gpus[i]["显存使用_MB"] = round(mem_info.used / (1024 ** 2))
+                    # WMI AdapterRAM 是 uint32，>4GB 会溢出成错误值；
+                    # pynvml 数据可靠，总是用它覆盖总量
+                    nvidia_gpus[i]["显存_MB"] = round(mem_info.total / (1024 ** 2))
+                except Exception:
+                    pass
         except Exception:
             pass  # 初始化失败（无 N 卡等），跳过

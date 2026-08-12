@@ -2,9 +2,22 @@
 config/settings.py - 配置管理器
 """
 import os
+import sys
 
 # 项目根目录
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def get_user_config_path() -> str:
+    """
+    用户配置文件路径：
+    - 开发模式: <项目根>/config.yaml
+    - 打包模式: EXE 同目录/config.yaml
+      （_MEIPASS 为临时解压目录，每次启动都变化，写入会随进程退出丢失）
+    """
+    if getattr(sys, "_MEIPASS", None):
+        return os.path.join(os.path.dirname(sys.executable), "config.yaml")
+    return os.path.join(_PROJECT_ROOT, "config.yaml")
 
 
 class Settings:
@@ -29,9 +42,8 @@ class Settings:
         if config_path:
             user_config = self._load_yaml(config_path)
         else:
-            # 默认查找程序同目录下的 config.yaml
-            user_path = os.path.join(_PROJECT_ROOT, "config.yaml")
-            user_config = self._load_yaml(user_path) if os.path.exists(user_path) else None
+            # 默认查找用户可写位置下的 config.yaml
+            user_config = self._load_yaml(get_user_config_path())
 
         if user_config:
             self._merge(self._config, user_config)

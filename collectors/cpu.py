@@ -80,9 +80,9 @@ class CPUCollector(BaseCollector):
         # - Intel 2nd gen+ (Sandy Bridge 2011) 支持 AVX
         # - Intel 4th gen+ (Haswell 2013) / AMD Zen+ 支持 AVX2
         # - 当前所有 x64 CPU 均为 2013 年后产品，默认包含
-        # - 如果 Identifier 包含 "Family 6" (Intel) 或 "Family 23/25/26" (AMD Zen+)则确认
+        # - Identifier 示例：Intel "Intel64 Family 6 Model 186..." / AMD "AuthenticAMD Family 25 Model 33..."
         id_lower = (identifier or "").lower()
-        is_x64 = "intel64" in id_lower or "amd64" in id_lower or "family 6" in id_lower
+        is_x64 = "intel64" in id_lower or "authenticamd" in id_lower
 
         if is_x64:
             sets.append("AVX")
@@ -121,9 +121,10 @@ class CPUCollector(BaseCollector):
         return None
 
     def _get_cpu_load(self) -> float | None:
-        """获取当前 CPU 负载"""
+        """获取当前 CPU 负载（psutil 首次调用返回 0.0，先预热启动采样）"""
         try:
             import psutil
+            psutil.cpu_percent(interval=None)  # 预热：记录采样起点
             return psutil.cpu_percent(interval=0.1)
         except Exception:
             return None
