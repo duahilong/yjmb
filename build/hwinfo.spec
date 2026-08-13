@@ -46,7 +46,8 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,          # 禁用 UPX：UPX 加壳的 DLL 加载时执行解压 stub，
+                        # 且杀毒软件会对 UPX 文件深度扫描，导致启动卡顿/误报
     upx_exclude=[],
     runtime_tmpdir=None,
     console=False,          # GUI 程序，无控制台窗口
