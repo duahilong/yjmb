@@ -236,7 +236,7 @@ class MainWindow(QMainWindow):
 
         self._worker = CollectWorker(categories=self._enabled_categories(), parent=self)
         self._worker.progress.connect(self._on_progress)
-        self._worker.finished.connect(self._on_collect_done)
+        self._worker.collect_finished.connect(self._on_collect_done)
         self._worker.error.connect(self._on_collect_error)
         self._worker.start()
 
@@ -329,10 +329,22 @@ class MainWindow(QMainWindow):
         return ""
 
     def closeEvent(self, event) -> None:
-        """窗口关闭时安全停止后台采集线程"""
+        """窗口关闭时安全停止后台采集线程。
+
+        采集线程可能被 WMI COM 调用阻塞（最长约 15s，由 manager 超时兜底），
+        wait() 超时后不能直接放行关闭——QThread 对象随窗口销毁会触发
+        "QThread: Destroyed while thread is still running" 崩溃。
+        此时拒绝本次关闭并挂接线程结束回调，待线程退出后自动关窗。
+        """
         if self._worker and self._worker.isRunning():
             self._worker.requestInterruption()
-            self._worker.wait(3000)
+            if not self._worker.wait(3000):
+                if not getattr(self, "_close_pending", False):
+                    self._close_pending = True
+                    # QThread 内建 finished：run() 返回时发出，队列连接回主线程
+                    self._worker.finished.connect(self.close)
+                event.ignore()
+                return
         event.accept()
 
     def _export_json(self) -> None:

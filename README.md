@@ -87,7 +87,7 @@ build\build.bat
 
 ```bash
 python -m pytest
-# 109 个单元测试：采集解析、格式化输出、pci.ids、配置、调度
+# 单元测试：采集解析、GPU 分类、CLI 类别解析、格式化输出、pci.ids、配置、调度、界面缩放
 ```
 
 ## 目录结构

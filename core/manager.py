@@ -10,8 +10,11 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# 模块级共享线程池（进程内复用，避免每次采集新建线程；daemon 线程，
-# 进程退出时自动结束，不阻塞退出）
+# 模块级共享线程池（进程内复用，避免每次采集新建线程）。
+# 注意：Python 3.9+ 的 ThreadPoolExecutor 工作线程是非 daemon 的，
+# 解释器正常退出时会 join 全部线程。极端情况下若某个 WMI COM 调用
+# 无限阻塞，可能延迟进程退出（本模块的采集等待已有整体超时兜底，
+# 只是放弃等待后该工作线程仍在后台占用）。GUI 强制结束进程不受影响。
 _executor: ThreadPoolExecutor | None = None
 
 
@@ -111,16 +114,16 @@ class CollectorManager:
         }
 
         try:
+            # as_completed 的 timeout 是整体兜底：WMI COM 调用可能无限阻塞，
+            # 超时后放弃等待，未完成模块由外层 except 标记为超时。
+            # 注意：as_completed 只产出已完成的 future，
+            # 因此 future.result() 不会超时，无需再传 timeout。
             for future in as_completed(future_map, timeout=self.TIMEOUT + 5):
                 collector = future_map[future]
                 try:
-                    data, elapsed = future.result(timeout=self.TIMEOUT)
+                    data, elapsed = future.result()
                     result.data[collector.name] = data
                     result.timings[collector.name] = elapsed
-                except FuturesTimeoutError:
-                    result.errors.append({"模块": collector.name, "错误": "采集超时"})
-                    result.timings[collector.name] = self.TIMEOUT
-                    logger.warning("模块 %s 采集超时", collector.name)
                 except CollectorError as e:
                     result.errors.append({"模块": collector.name, "错误": str(e)})
                     logger.warning("模块 %s 采集失败: %s", collector.name, e)

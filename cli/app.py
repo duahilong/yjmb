@@ -51,13 +51,15 @@ def build_parser() -> argparse.ArgumentParser:
 def resolve_categories(
     categories: list[str],
     hide: str,
-    settings: Settings = None,
+    settings: Settings | None = None,
 ) -> list[str] | None:
     """
     解析要采集的类别列表。
 
     Returns:
-        类别列表，None 表示全部。
+        类别列表；None 表示全部。
+        空列表表示指定类别全部无效/被隐藏（调用方应报错退出），
+        避免静默回退成全量采集的意外行为。
     """
     # 处理 hide
     exclude = set()
@@ -77,13 +79,13 @@ def resolve_categories(
             return [c for c in ALL_CATEGORIES if c not in exclude]
         return None  # None 表示全部
     else:
-        # 指定类别
+        # 指定类别：过滤无效项与被隐藏项，保留空结果交由调用方处理
         result = []
         for cat in categories:
             cat = cat.strip().lower()
             if cat in ALL_CATEGORIES and cat not in exclude:
                 result.append(cat)
-        return result if result else None
+        return result
 
 
 def run_cli(argv: list[str]) -> None:
@@ -105,6 +107,11 @@ def run_cli(argv: list[str]) -> None:
 
     # 确定要采集的类别
     categories = resolve_categories(args.categories, args.hide, settings)
+
+    if categories == []:
+        # 指定的类别全部无效或被隐藏/排除，静默全量采集是意外行为
+        print("错误：指定的类别均无效或已被隐藏，未采集任何内容", file=sys.stderr)
+        sys.exit(2)
 
     if args.debug:
         print(f"[DEBUG] 采集类别: {categories or '全部'}", file=sys.stderr)

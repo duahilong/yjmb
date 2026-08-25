@@ -58,11 +58,11 @@ class NetworkCollector(BaseCollector):
         is_wireless = self._is_wireless(name, adapter_type, adapter.PNPDeviceID)
         net_type = "无线" if is_wireless else "以太网"
 
-        # 状态
+        # 状态（MSDN Win32_NetworkAdapter.NetConnectionStatus）
         status_code = adapter.NetConnectionStatus
         status_map = {
             0: "未连接",
-            1: "已连接",
+            1: "正在连接",
             2: "已连接",
             3: "正在断开",
             4: "硬件不存在",
@@ -86,8 +86,8 @@ class NetworkCollector(BaseCollector):
             try:
                 speed_val = int(adapter.Speed)
                 # 过滤无效值（如 int64 最大值 9223372036854775807）
-                # 过滤虚拟网卡的不合理速率（>10Gbps 通常是虚拟适配器）
-                if 0 < speed_val < 10_000_000_000:  # 小于 10Gbps 才合理
+                # >10Gbps 通常是虚拟适配器的假速率，真实 10G 网卡取等号保留
+                if 0 < speed_val <= 10_000_000_000:
                     speed_gbps = bps_to_gbps(speed_val)
             except (ValueError, TypeError):
                 pass

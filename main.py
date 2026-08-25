@@ -1,6 +1,6 @@
 """
 HWInfo - Windows 硬件检测工具
-主入口：无参数 → GUI（未来），有参数 → CLI
+主入口：无参数 → GUI，有参数 → CLI
 """
 import sys
 import os
@@ -24,23 +24,6 @@ def main():
     else:
         from gui.app import run_gui
         run_gui()
-        # 仅 GUI 模式抑制 COM 噪音（CLI 模式保留 stderr，避免吞掉 --debug 输出）
-        _suppress_com_noise()
-
-
-def _suppress_com_noise() -> None:
-    """程序退出前清理 COM 对象，并将 stderr 重定向到 devnull，抑制
-    pythoncom C 扩展在解释器关闭时产生的 "Win32 exception" 消息。
-    这些消息是 COM 对象被 GC 释放产生的，不影响功能。"""
-    import gc
-    gc.collect()
-    gc.collect()
-    try:
-        _devnull = os.open(os.devnull, os.O_WRONLY)
-        os.dup2(_devnull, 2)  # 将 stderr 重定向到 devnull，不恢复
-        os.close(_devnull)
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

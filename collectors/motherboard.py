@@ -255,23 +255,39 @@ class MotherboardCollector(BaseCollector):
         return "未检测到"
 
     def _check_uefi(self) -> bool | None:
-        """检测是否为 UEFI 启动"""
+        """检测是否为 UEFI 启动，分层降级：
+
+        1. 注册表 PEFirmwareType（微软官方方式）：
+           1 = BIOS(传统)，2 = UEFI，3 = 混合(UEFI+BIOS)
+        2. 检测 GPT 磁盘上的 EFI 系统分区（ESP）：存在即 UEFI 启动
+           （BIOS 只能从 MBR 磁盘引导，不会存在 ESP）
+        """
+        # 层 1：注册表
         try:
-            import os
-            # UEFI 系统会有此目录
-            efi_path = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "Boot", "EFI")
-            if os.path.exists(efi_path):
-                return True
-            # 也可以通过注册表检查
             import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SYSTEM\CurrentControlSet\Control",
+            )
             try:
-                key = winreg.OpenKey(
-                    winreg.HKEY_LOCAL_MACHINE,
-                    r"SYSTEM\CurrentControlSet\Control\SecureBoot\State",
-                )
+                value, _ = winreg.QueryValueEx(key, "PEFirmwareType")
+            finally:
                 winreg.CloseKey(key)
+            if value in (2, 3):
                 return True
-            except FileNotFoundError:
+            if value == 1:
                 return False
+        except Exception:
+            pass  # 部分系统无此键，进入层 2
+
+        # 层 2：EFI 系统分区检测（约 100ms）
+        try:
+            import wmi
+            ns = wmi.WMI(namespace=r"root\Microsoft\Windows\Storage")
+            esps = ns.query(
+                "SELECT GptType FROM MSFT_Partition "
+                "WHERE GptType = '{C12A7328-F81F-11D2-BA4B-00A0C93EC93B}'"
+            )
+            return len(esps) > 0
         except Exception:
             return None
