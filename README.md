@@ -99,10 +99,11 @@ gui/             GUI 桌面应用（主窗口/页面/组件）
 core/            核心调度（CollectorManager、注册表、常量）
 collectors/      9 个采集模块
 formatters/      输出格式化（terminal / json）
-utils/           WMI 封装、pci.ids、PowerShell、格式化工具
+utils/           WMI 封装、pci.ids、注册表、PowerShell、格式化、日志
 config/          默认配置
 data/pci.ids     PCI ID 离线数据库
 build/           PyInstaller 打包配置
 tests/           单元测试
-docs/            需求文档与设计文档
+docs/            需求文档、设计文档、后端优化计划
+prototypes/      GUI 视觉方案原型（不参与打包）
 ```

@@ -55,6 +55,7 @@ class CollectorManager:
         categories: list[str] | None = None,
         exclude: list[str] | None = None,
         parallel: bool = True,
+        on_category: callable = None,
     ) -> CollectResult:
         """
         执行采集。
@@ -63,6 +64,9 @@ class CollectorManager:
             categories: 要采集的类别列表。None 表示全部。
             exclude: 要排除的类别列表。
             parallel: 是否并行采集。
+            on_category: 可选进度回调，每完成一个类别就调用一次，
+                         签名为 (name, data | None, elapsed_seconds)。
+                         data 为 None 表示该类别采集失败。GUI 用它做渐进填充。
 
         Returns:
             CollectResult 包含数据、错误、警告、耗时。
@@ -79,9 +83,9 @@ class CollectorManager:
             return result
 
         if parallel and len(targets) > 1:
-            self._collect_parallel(targets, result)
+            self._collect_parallel(targets, result, on_category)
         else:
-            self._collect_sequential(targets, result)
+            self._collect_sequential(targets, result, on_category)
 
         # 从各模块数据中提取 _警告
         for name, data in result.data.items():
@@ -95,7 +99,8 @@ class CollectorManager:
         result.elapsed_seconds = round(time.perf_counter() - start, 2)
         return result
 
-    def _collect_parallel(self, targets: list[BaseCollector], result: CollectResult) -> None:
+    def _collect_parallel(self, targets: list[BaseCollector], result: CollectResult,
+                          on_category: callable = None) -> None:
         """并行采集"""
         def _run_collector(collector: BaseCollector) -> tuple[dict, float]:
             """在工作线程中执行采集，完成后清理 COM"""
@@ -124,12 +129,18 @@ class CollectorManager:
                     data, elapsed = future.result()
                     result.data[collector.name] = data
                     result.timings[collector.name] = elapsed
+                    if on_category:
+                        on_category(collector.name, data, elapsed)
                 except CollectorError as e:
                     result.errors.append({"模块": collector.name, "错误": str(e)})
                     logger.warning("模块 %s 采集失败: %s", collector.name, e)
+                    if on_category:
+                        on_category(collector.name, None, result.timings.get(collector.name, 0.0))
                 except Exception as e:
                     result.errors.append({"模块": collector.name, "错误": f"未知错误: {e}"})
                     logger.exception("模块 %s 采集异常", collector.name)
+                    if on_category:
+                        on_category(collector.name, None, result.timings.get(collector.name, 0.0))
         except FuturesTimeoutError:
             # as_completed 总超时兜底：WMI COM 调用可能无限阻塞，
             # 整体超时后将未完成模块标记为超时，避免整个采集抛异常
@@ -138,23 +149,33 @@ class CollectorManager:
                 if collector.name not in result.data:
                     result.errors.append({"模块": collector.name, "错误": "采集超时"})
                     result.timings[collector.name] = self.TIMEOUT
+                    if on_category:
+                        on_category(collector.name, None, float(self.TIMEOUT))
 
-    def _collect_sequential(self, targets: list[BaseCollector], result: CollectResult) -> None:
+    def _collect_sequential(self, targets: list[BaseCollector], result: CollectResult,
+                            on_category: callable = None) -> None:
         """顺序采集（调试用）"""
         for collector in targets:
             t0 = time.perf_counter()
             try:
                 data = collector.collect()
+                elapsed = round(time.perf_counter() - t0, 3)
                 result.data[collector.name] = data
-                result.timings[collector.name] = round(time.perf_counter() - t0, 3)
+                result.timings[collector.name] = elapsed
+                if on_category:
+                    on_category(collector.name, data, elapsed)
             except CollectorError as e:
                 result.errors.append({"模块": collector.name, "错误": str(e)})
                 result.timings[collector.name] = round(time.perf_counter() - t0, 3)
                 logger.warning("模块 %s 采集失败: %s", collector.name, e)
+                if on_category:
+                    on_category(collector.name, None, result.timings[collector.name])
             except Exception as e:
                 result.errors.append({"模块": collector.name, "错误": f"未知错误: {e}"})
                 result.timings[collector.name] = round(time.perf_counter() - t0, 3)
                 logger.exception("模块 %s 采集异常", collector.name)
+                if on_category:
+                    on_category(collector.name, None, result.timings[collector.name])
 
     def _filter_collectors(
         self,

@@ -11,7 +11,6 @@ a = Analysis(
     binaries=[],
     datas=[
         (os.path.join(_ROOT, 'data', 'pci.ids'), 'data'),
-        (os.path.join(_ROOT, 'gui', 'resources'), os.path.join('gui', 'resources')),
     ],
     hiddenimports=[
         'wmi',

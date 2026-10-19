@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HWInfo GUI 原型 A / B 对比</title>
+<style>
+  :root {
+    --ink: #e8eeea;
+    --muted: #94a49c;
+    --line: #26332c;
+    --bg: #0d1311;
+    --panel: #131c17;
+    --amber: #e3a857;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 36px 56px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+  }
+  header { max-width: 1280px; margin: 0 auto 28px; }
+  .eyebrow {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11px;
+    letter-spacing: .14em;
+    color: var(--amber);
+    text-transform: uppercase;
+  }
+  h1 { font-size: 30px; font-weight: 700; margin: 8px 0 10px; letter-spacing: -.01em; }
+  .lede { color: var(--muted); font-size: 14px; line-height: 1.7; max-width: 880px; margin: 0; }
+  .grid {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } }
+  figure { margin: 0; }
+  figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+  figcaption { margin-top: 12px; }
+  figcaption b { font-size: 15px; }
+  figcaption .tag {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 10px;
+    color: var(--amber);
+    margin-left: 8px;
+  }
+  figcaption p { color: var(--muted); font-size: 13px; line-height: 1.65; margin: 6px 0 0; }
+  table {
+    max-width: 1280px;
+    width: 100%;
+    margin: 40px auto 0;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  caption {
+    text-align: left;
+    color: var(--muted);
+    font-size: 13px;
+    padding-bottom: 12px;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tbody td:first-child { color: var(--muted); white-space: nowrap; }
+  tbody tr:hover { background: #16211b; }
+  .note {
+    max-width: 1280px;
+    margin: 32px auto 0;
+    padding: 16px 18px;
+    border-left: 2px solid var(--amber);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .note b { color: var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">HWInfo · GUI Redesign · Static Prototype</div>
+  <h1>两版静态原型：A 工程铭牌 / B 深色诊断台</h1>
+  <p class="lede">
+    同一份 mock 数据（取自项目真机采集结果），只验证视觉方向和信息架构，不接真实采集、不改动现有 <code>gui/</code>。
+    两版都只使用系统字体，不打包字体文件，符合「单文件 EXE 体积优先」的约束。
+  </p>
+</header>
+
+<div class="grid">
+  <figure>
+    <img src="out/a_bench_sheet.png" alt="方案 A：Bench Sheet 工程铭牌">
+    <figcaption>
+      <b>A · Bench Sheet / 工程铭牌</b><span class="tag">LIGHT · DATASHEET</span>
+      <p>深色左导轨 + 机器身份条 + 系统带 + 规格表 + 采集摘要侧栏。信息密度高，适合「一次看全、截图存档、发给别人」。</p>
+    </figcaption>
+  </figure>
+  <figure>
+    <img src="out/b_night_bench.png" alt="方案 B：Night Bench 深色诊断台">
+    <figcaption>
+      <b>B · Night Bench / 深色诊断台</b><span class="tag">DARK · LIVE MONITOR</span>
+      <p>顶部品牌栏 + 横向标签 + 自绘系统拓扑 + 实时指标（sparkline）+ 设备清单。突出实时监控与硬件拓扑关系。</p>
+    </figcaption>
+  </figure>
+</div>
+
+<table>
+  <caption>对比维度</caption>
+  <thead>
+    <tr><th>维度</th><th>A · Bench Sheet</th><th>B · Night Bench</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>气质</td><td>工程数据表、可信、克制，像仪器铭牌</td><td>诊断台、沉浸，偏游戏/超频玩家</td></tr>
+    <tr><td>信息密度</td><td>高，一屏看全 9 类硬件</td><td>中，拓扑和曲线占用空间</td></tr>
+    <tr><td>实时监控</td><td>不适合，无天然位置</td><td>天然适合，已有 LIVE + sparkline 位置</td></tr>
+    <tr><td>长时间阅读</td><td>好，浅色纸面 + 等宽数字</td><td>一般，深色下长文本更累</td></tr>
+    <tr><td>实现成本</td><td>较低，表格 + QSS 即可</td><td>较高，需要自绘拓扑、sparkline、定时刷新</td></tr>
+    <tr><td>单文件 EXE 体积</td><td>契合，系统字体即可</td><td>契合，自绘不引入额外依赖</td></tr>
+    <tr><td>主要风险</td><td>没有实时监控，硬件工具的「工具感」偏弱</td><td>深色 + 荧光容易落入模板化；实现和性能成本更高</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <b>你的优先级是「单文件 EXE 体积优先」+「实时监控」。</b>
+  这两点组合下，纯 A 不够（没有实时监控的位置），纯 B 又偏重。建议第三版：<b>混合方案</b>——
+  用 A 的浅色规格表作为默认视图，单独给「总览」页顶部加一条 B 风格的实时监控带（CPU/GPU/内存 sparkline），
+  既不牺牲信息密度，也能承载实时监控，且仍然只用系统字体、不增加打包体积。
+</div>
+</body>
+</html>

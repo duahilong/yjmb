@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HWInfo GUI · 便当格页面集</title>
+<style>
+  :root {
+    --ink: #eef1f4; --muted: #98a2ad; --line: #262b31;
+    --bg: #0e1013; --panel: #15181c; --accent: #4c6ef5; --accent2: #6ee7d7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 44px 36px 64px; background: var(--bg); color: var(--ink);
+    font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+  }
+  header { max-width: 1280px; margin: 0 auto 34px; }
+  .eyebrow {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11px; letter-spacing: .16em; color: var(--accent2); text-transform: uppercase;
+  }
+  h1 { font-size: 30px; margin: 8px 0 10px; letter-spacing: -.01em; }
+  .lede { color: var(--muted); font-size: 14px; line-height: 1.75; max-width: 940px; margin: 0; }
+  .tokens {
+    max-width: 1280px; margin: 22px auto 0; display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .token {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 12px; font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px;
+    color: var(--muted);
+  }
+  .swatch { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+  .page { max-width: 1280px; margin: 40px auto 0; }
+  .page-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .no {
+    font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; color: var(--accent2);
+  }
+  .page-head h2 { font-size: 18px; margin: 0; }
+  .page-head p { margin: 0; color: var(--muted); font-size: 13px; }
+  .page img {
+    display: block; width: 100%; height: auto;
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  @media (max-width: 1080px) { .grid2 { grid-template-columns: 1fr; } }
+  table {
+    max-width: 1280px; width: 100%; margin: 46px auto 0;
+    border-collapse: collapse; font-size: 13px;
+  }
+  caption { text-align: left; color: var(--muted); font-size: 13px; padding-bottom: 12px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tbody td:first-child { color: var(--muted); white-space: nowrap; }
+  tbody tr:hover { background: #171b20; }
+  .note {
+    max-width: 1280px; margin: 34px auto 0; padding: 16px 18px;
+    border-left: 2px solid var(--accent2); background: var(--panel);
+    color: var(--muted); font-size: 13px; line-height: 1.8;
+  }
+  .note b { color: var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">HWInfo · GUI Redesign · Bento Page Set</div>
+  <h1>便当格 · 关键页面</h1>
+  <p class="lede">
+    风格定为 <b>03 便当格</b> 后，先补全关键页面：总览、类别详情（标量型 / 列表型）、设置、加载 / 空 / 失败与渐进采集。
+    全部 1440×900，共用同一套圆角、阴影与配色；仍然只用 Windows 自带字体。
+  </p>
+  <div class="tokens">
+    <span class="token"><span class="swatch" style="background:#EEF1F4"></span>背景 #EEF1F4</span>
+    <span class="token"><span class="swatch" style="background:#FFFFFF"></span>卡片 #FFFFFF</span>
+    <span class="token"><span class="swatch" style="background:#1B2430"></span>文字 #1B2430</span>
+    <span class="token"><span class="swatch" style="background:#4C6EF5"></span>CPU #4C6EF5</span>
+    <span class="token"><span class="swatch" style="background:#12B886"></span>内存 #12B886</span>
+    <span class="token"><span class="swatch" style="background:#F76707"></span>显卡 #F76707</span>
+    <span class="token"><span class="swatch" style="background:#7048E8"></span>存储 #7048E8</span>
+    <span class="token"><span class="swatch" style="background:#1098AD"></span>网络 #1098AD</span>
+    <span class="token"><span class="swatch" style="background:#E64980"></span>显示器 #E64980</span>
+    <span class="token"><span class="swatch" style="background:#F59F00"></span>音频 #F59F00</span>
+    <span class="token">圆角 20px · 阴影 26px / 8px</span>
+    <span class="token">Bahnschrift · 微软雅黑 · Cascadia Mono</span>
+  </div>
+</header>
+
+<section class="page">
+  <div class="page-head">
+    <span class="no">01</span><h2>总览</h2>
+    <p>本机大卡 + 8 张类别卡，一屏看完</p>
+  </div>
+  <img src="out/03_bento.png" alt="总览">
+</section>
+
+<div class="grid2" style="max-width:1280px;margin:40px auto 0;">
+  <section class="page" style="margin:0;">
+    <div class="page-head">
+      <span class="no">02</span><h2>处理器详情</h2>
+      <p>标量型类别：型号 / 核心 / 缓存 / 特性 / 明细</p>
+    </div>
+    <img src="out/06_detail_cpu.png" alt="处理器详情">
+  </section>
+  <section class="page" style="margin:0;">
+    <div class="page-head">
+      <span class="no">03</span><h2>存储详情</h2>
+      <p>列表型类别：设备卡 + 分区条</p>
+    </div>
+    <img src="out/07_detail_storage.png" alt="存储详情">
+  </section>
+</div>
+
+<section class="page" style="margin-top:40px;">
+  <div class="page-head">
+    <span class="no">04</span><h2>设置</h2>
+    <p>9 个类别开关 + 外观 / 采集 / 关于 + 底部保存条</p>
+  </div>
+  <img src="out/08_settings.png" alt="设置">
+</section>
+
+<section class="page" style="margin-top:40px;">
+  <div class="page-head">
+    <span class="no">05</span><h2>状态与渐进采集</h2>
+    <p>卡片级加载 / 空 / 失败 + 采集进度与类别状态</p>
+  </div>
+  <img src="out/09_states.png" alt="状态">
+</section>
+
+<table>
+  <caption>页面与交互覆盖</caption>
+  <thead>
+    <tr><th>页面</th><th>承载内容</th><th>复用组件</th><th>接入采集层时的要点</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>总览</td>
+      <td>本机身份、CPU / 内存 / 显卡 / 存储 / 网络 / 显示器 / 音频 / 主板</td>
+      <td>卡片、图标块、迷你指标、内存插槽、核心格、进度条</td>
+      <td>每完成一类就填充对应卡片，先占位骨架再替换</td>
+    </tr>
+    <tr>
+      <td>类别详情</td>
+      <td>标量型（处理器）与列表型（存储）两套模板，其余 7 类套用</td>
+      <td>卡片、定义列表、缓存条、分区条、开关标签</td>
+      <td>列表型按设备循环生成卡片；分区来自 <code>collectors/storage</code></td>
+    </tr>
+    <tr>
+      <td>设置</td>
+      <td>类别显示开关、密度、主题、置顶、超时、关于</td>
+      <td>自定义开关、分组分段控件、底部操作条</td>
+      <td>修掉「禁用全部类别却采集全部」的过滤逻辑</td>
+    </tr>
+    <tr>
+      <td>状态</td>
+      <td>加载骨架、空态、失败态、采集进行中（4 / 9）</td>
+      <td>骨架条、圆形状态徽标、状态标签、进度条</td>
+      <td>需要 <code>CollectorManager</code> 提供逐类回调</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <b>下一步：</b>这套页面结构确认后，就可以按它重写 <code>gui/</code>：先落 tokens 与组件库，
+  再接 <code>AppState</code> 与渐进式采集回调，最后把「总览 / 详情 / 设置」接上真实数据。
+  实时监控按之前约定继续后置，但圆环与进度条组件已经预留。
+</div>
+</body>
+</html>

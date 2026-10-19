@@ -33,10 +33,35 @@ def _suppress_com_noise() -> None:
         pass
 
 
+def _preload_backend() -> None:
+    """在主线程预热采集依赖。
+
+    pywin32 的扩展 DLL（pywintypes）首次导入会持有导入锁并等待系统加载器锁；
+    如果这一步发生在采集线程，而主线程正在做首次绘制（同样会加载 Qt 的 DLL），
+    两者可能互相等待，表现为所有类别「采集超时」。提前在主线程导入即可避免。
+    """
+    try:
+        import pythoncom  # noqa: F401
+        import wmi  # noqa: F401
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import pynvml  # noqa: F401
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import collectors
+        collectors.load_all()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def run_gui() -> None:
     """启动 GUI 应用"""
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import Qt
+
+    _preload_backend()
 
     # 高 DPI 支持
     QApplication.setHighDpiScaleFactorRoundingPolicy(
@@ -47,12 +72,22 @@ def run_gui() -> None:
     app.setApplicationName("HWInfo")
     app.setApplicationDisplayName("HWInfo - Windows 硬件检测工具")
     app.setOrganizationName("HWInfo")
+    # Fusion 对 QSS 圆角/边框的渲染最稳定，不受 Windows 原生控件主题干扰
+    app.setStyle("Fusion")
 
-    # 加载全局样式表
-    qss_path = resource_path(os.path.join("gui", "resources", "style.qss"))
-    if os.path.exists(qss_path):
-        with open(qss_path, "r", encoding="utf-8") as f:
-            app.setStyleSheet(f.read())
+    # 主题、密度与缩放来自 config.yaml 的 gui 段
+    from gui import prefs, theme
+    from gui.zoom import ZOOM_MAX, ZOOM_MIN, set_zoom
+
+    saved = prefs.gui_prefs()
+    theme.set_theme(saved.get("theme", "light"))
+    theme.set_density(saved.get("density", "comfortable"))
+    try:
+        set_zoom(max(ZOOM_MIN, min(ZOOM_MAX, float(saved.get("zoom", 1.0)))))
+    except (TypeError, ValueError):
+        set_zoom(1.0)
+
+    app.setStyleSheet(theme.build_qss())
 
     from gui.main_window import MainWindow
     window = MainWindow()

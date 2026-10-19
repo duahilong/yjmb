@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HWInfo GUI · 5 套风格原型</title>
+<style>
+  :root {
+    --ink: #eef1f4;
+    --muted: #98a2ad;
+    --line: #262b31;
+    --bg: #0e1013;
+    --panel: #15181c;
+    --accent: #6ee7d7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 44px 36px 64px;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+  }
+  header { max-width: 1280px; margin: 0 auto 30px; }
+  .eyebrow {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11px; letter-spacing: .16em; color: var(--accent); text-transform: uppercase;
+  }
+  h1 { font-size: 30px; margin: 8px 0 10px; letter-spacing: -.01em; }
+  .lede { color: var(--muted); font-size: 14px; line-height: 1.75; max-width: 900px; margin: 0; }
+  .grid {
+    max-width: 1280px; margin: 22px auto 0;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 26px;
+  }
+  @media (max-width: 1080px) { .grid { grid-template-columns: 1fr; } }
+  figure { margin: 0; }
+  figure img {
+    display: block; width: 100%; height: auto;
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  figcaption { margin-top: 12px; }
+  .tag {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 10px; color: var(--accent); letter-spacing: .08em;
+  }
+  figcaption h2 { font-size: 16px; margin: 4px 0 6px; }
+  figcaption p { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0; }
+  table {
+    max-width: 1280px; width: 100%; margin: 44px auto 0;
+    border-collapse: collapse; font-size: 13px;
+  }
+  caption { text-align: left; color: var(--muted); font-size: 13px; padding-bottom: 12px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  thead th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tbody td:first-child { color: var(--muted); white-space: nowrap; }
+  tbody tr:hover { background: #171b20; }
+  .note {
+    max-width: 1280px; margin: 34px auto 0; padding: 16px 18px;
+    border-left: 2px solid var(--accent); background: var(--panel);
+    color: var(--muted); font-size: 13px; line-height: 1.75;
+  }
+  .note b { color: var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">HWInfo · GUI Redesign · 5 Style Directions</div>
+  <h1>五套界面风格原型</h1>
+  <p class="lede">
+    同一份 mock 数据（取自真机采集结果）、同样的 1440×900 尺寸，只换视觉语言。
+    五套都只用 Windows 自带字体（Bahnschrift / Georgia / Cascadia Mono / 微软雅黑），不打包字体，符合「单文件 EXE 体积优先」。
+    实时监控已按你的要求后置，本回合只做风格。
+  </p>
+</header>
+
+<div class="grid">
+  <figure>
+    <img src="out/01_blueprint.png" alt="01 Blueprint">
+    <figcaption>
+      <div class="tag">01 · BLUEPRINT</div>
+      <h2>蓝图工程图</h2>
+      <p>深普鲁士蓝 + 白色技术线稿 + 自绘系统框图 + 引出标注 + 尺寸线 + 右下角图签。把硬件检测变成一张工程图纸，辨识度最高。</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="out/02_editorial.png" alt="02 Editorial">
+    <figcaption>
+      <div class="tag">02 · EDITORIAL</div>
+      <h2>规格手册 / 杂志排版</h2>
+      <p>冷白纸面 + Georgia 衬线大字号 + 朱红点缀 + 细发丝线与三栏规格。最有「高级感」，适合截图存档与对外分享。</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="out/03_bento.png" alt="03 Bento">
+    <figcaption>
+      <div class="tag">03 · BENTO</div>
+      <h2>便当格总览</h2>
+      <p>浅灰底 + 白色大圆角卡片 + 柔和阴影 + 每类一色。友好、现代、门槛最低，普通用户和装机场景最容易接受。</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="out/04_glass.png" alt="04 Glass">
+    <figcaption>
+      <div class="tag">04 · GLASS</div>
+      <h2>深色玻璃 / 现代高级感</h2>
+      <p>深夜渐变 + 柔光 + 半透明磨砂面板 + 青紫渐变点缀。最有「数码产品」质感，偏年轻、偏好看。</p>
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="out/05_printout.png" alt="05 Printout">
+    <figcaption>
+      <div class="tag">05 · PRINTOUT</div>
+      <h2>点阵打印报告</h2>
+      <p>深灰桌面 + 米白纸张 + 等宽字体 + 点线引导 + 印章 + 条形码。像一张刚打印出来的诊断单，复古且有记忆点。</p>
+    </figcaption>
+  </figure>
+</div>
+
+<table>
+  <caption>五套风格对比</caption>
+  <thead>
+    <tr><th>维度</th><th>01 蓝图</th><th>02 杂志</th><th>03 便当</th><th>04 玻璃</th><th>05 打印</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>气质</td><td>工程、硬核、技术</td><td>高级、编辑、克制</td><td>友好、现代、生活化</td><td>数码、精致、沉浸</td><td>复古、机械、有梗</td></tr>
+    <tr><td>信息密度</td><td>高</td><td>中高</td><td>中</td><td>中</td><td>高（单列）</td></tr>
+    <tr><td>主色调</td><td>深蓝 + 青色线</td><td>白 + 黑 + 朱红</td><td>浅灰 + 多彩</td><td>夜黑 + 青紫渐变</td><td>米白 + 墨黑 + 印章红绿</td></tr>
+    <tr><td>最适合</td><td>IT 支持 / 硬件爱好者</td><td>对外报告 / 截图分享</td><td>普通用户 / 装机单</td><td>年轻用户 / 展示向</td><td>存档 / 打印 / 趣味</td></tr>
+    <tr><td>实现成本</td><td>中高（自绘框图）</td><td>低（纯排版）</td><td>中（卡片 + 少量自绘）</td><td>中高（渐变 + 自绘圆环）</td><td>中（点线 + 印章 + 条形码自绘）</td></tr>
+    <tr><td>深色 / 浅色</td><td>深色</td><td>浅色</td><td>浅色</td><td>深色</td><td>浅色（纸面）</td></tr>
+    <tr><td>风险</td><td>偏冷、普通用户可能觉得太工程</td><td>留白多、一屏信息略少</td><td>个性偏弱、容易撞脸同类应用</td><td>深色长文本阅读一般、渐变需克制</td><td>信息长、不适合频繁交互</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <b>怎么选：</b>如果目标是「一眼好看、人人能懂」，选 <b>03 便当</b> 或 <b>04 玻璃</b>；
+  如果想要「有身份、像专业工具」，选 <b>01 蓝图</b>；如果主要用途是「截图给客户/同事看」，选 <b>02 杂志</b>；
+  如果想要「有意思、能记住」，选 <b>05 打印</b>。<br>
+  也可以混合：例如用 <b>03 便当</b> 做主界面，把 <b>05 打印</b> 做成「导出报告」的样式。
+</div>
+</body>
+</html>
