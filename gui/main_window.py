@@ -40,8 +40,8 @@ class MainWindow(QMainWindow):
     def __init__(self, auto_collect: bool = True):
         super().__init__()
         self.setWindowTitle("HWInfo")
-        self.resize(1360, 860)
         self.setMinimumSize(1080, 700)
+        self._apply_default_geometry()
         self.setWindowIcon(qicon("cpu", theme.accent("cpu"), 64))
 
         self._worker: CollectWorker | None = None
@@ -362,6 +362,24 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+E"), self, activated=self.export_json)
         QShortcut(QKeySequence("Ctrl+Plus"), self, activated=lambda: self._zoom(ZOOM_STEP))
         QShortcut(QKeySequence("Ctrl+Minus"), self, activated=lambda: self._zoom(-ZOOM_STEP))
+
+    def _apply_default_geometry(self) -> None:
+        """默认窗口尺寸：按可用屏幕自适应。
+
+        高 DPI 下 1360×860 逻辑像素只占屏幕一小块，把尺寸写死会让总览
+        的最后一行挤出可视区（必须滚动才能看全）。
+        """
+        preferred_w, preferred_h = 1360, 920
+        screen = QApplication.primaryScreen()
+        available = screen.availableGeometry() if screen is not None else None
+        if available is None:
+            self.resize(preferred_w, preferred_h)
+            return
+        width = min(preferred_w, max(1080, available.width() - 120))
+        height = min(preferred_h, max(700, available.height() - 90))
+        self.resize(width, height)
+        self.move(available.x() + (available.width() - width) // 2,
+                  available.y() + (available.height() - height) // 2)
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if self._worker is not None and self._worker.isRunning():
