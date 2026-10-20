@@ -70,8 +70,18 @@ def test_main_window_backend_integration(
     )
     qapp.setStyleSheet(theme.build_qss())
 
+    from gui.icons import app_icon, app_icon_path
+
+    assert os.path.isfile(app_icon_path())
+    icon = app_icon()
+    assert not icon.isNull()
+    icon_sizes = {(size.width(), size.height()) for size in icon.availableSizes()}
+    assert (16, 16) in icon_sizes
+    assert (256, 256) in icon_sizes
+
     window = MainWindow(auto_collect=False)
     try:
+        assert not window.windowIcon().isNull()
         window.start_collect()
         result = _wait_for_result(window, qapp)
 

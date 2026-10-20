@@ -1,9 +1,12 @@
 """
 gui/icons.py - 线性图标与绘制工具
 
-图标用内嵌 SVG 渲染成 QPixmap，不打包字体、不依赖图片资源，
-单文件 EXE 体积不受影响；颜色随主题变化。
+界面图标用内嵌 SVG 渲染成 QPixmap，不打包字体；颜色随主题变化。
+应用图标从 assets/hwinfo.ico 加载，同时供窗口、任务栏和 EXE 文件使用。
 """
+import os
+import sys
+
 from PySide6.QtCore import QByteArray, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
@@ -100,6 +103,22 @@ def icon_pixmap(name: str, color: str, size: int = 18, width: float = 1.6) -> QP
 
 def qicon(name: str, color: str, size: int = 18, width: float = 1.6) -> QIcon:
     return QIcon(icon_pixmap(name, color, size, width))
+
+
+def app_icon_path() -> str:
+    """应用图标路径，兼容源码运行与 PyInstaller 单文件模式。"""
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, "assets", "hwinfo.ico")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(root, "assets", "hwinfo.ico")
+
+
+def app_icon() -> QIcon:
+    """窗口 / 任务栏使用的多尺寸应用图标；缺失时回退到 CPU 线稿。"""
+    path = app_icon_path()
+    if os.path.isfile(path):
+        return QIcon(path)
+    return qicon("cpu", "#4C6EF5", 64)
 
 
 def icon_size(size: int = 18) -> QSize:

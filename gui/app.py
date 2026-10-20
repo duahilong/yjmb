@@ -60,6 +60,7 @@ def run_gui() -> None:
     """启动 GUI 应用"""
     from PySide6.QtWidgets import QApplication
     from PySide6.QtCore import Qt
+    from gui.icons import app_icon
 
     _preload_backend()
 
@@ -72,6 +73,7 @@ def run_gui() -> None:
     app.setApplicationName("HWInfo")
     app.setApplicationDisplayName("HWInfo - Windows 硬件检测工具")
     app.setOrganizationName("HWInfo")
+    app.setWindowIcon(app_icon())
     # Fusion 对 QSS 圆角/边框的渲染最稳定，不受 Windows 原生控件主题干扰
     app.setStyle("Fusion")
 

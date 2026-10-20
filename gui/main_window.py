@@ -24,9 +24,9 @@ from PySide6.QtWidgets import (
 
 from core.constants import ALL_CATEGORIES, CATEGORY_LABELS
 from core.manager import CollectResult
-from gui import icons, prefs, theme
+from gui import prefs, theme
 from gui.components import action_button, clear_layout, icon_button, label
-from gui.icons import qicon, rgba
+from gui.icons import app_icon, rgba
 from gui.pages.detail import DetailPage
 from gui.pages.overview import OverviewPage
 from gui.pages.settings import SettingsPage
@@ -42,7 +42,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("HWInfo")
         self.setMinimumSize(1080, 700)
         self._apply_default_geometry()
-        self.setWindowIcon(qicon("cpu", theme.accent("cpu"), 64))
+        self.setWindowIcon(app_icon())
 
         self._worker: CollectWorker | None = None
         self._result: CollectResult | None = None

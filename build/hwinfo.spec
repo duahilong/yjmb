@@ -11,6 +11,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (os.path.join(_ROOT, 'data', 'pci.ids'), 'data'),
+        (os.path.join(_ROOT, 'assets', 'hwinfo.ico'), 'assets'),
     ],
     hiddenimports=[
         'wmi',
@@ -51,5 +52,5 @@ exe = EXE(
     runtime_tmpdir=None,
     console=False,          # GUI 程序，无控制台窗口
     disable_windowed_traceback=False,
-    icon=None,
+    icon=os.path.join(_ROOT, 'assets', 'hwinfo.ico'),
 )
