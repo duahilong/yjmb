@@ -21,6 +21,17 @@ _ARCH_MAP = {
     12: "ARM64",
 }
 
+# 只取需要的字段：SELECT * 会强制求值 LoadPercentage，
+# 该属性在 Win32_Processor 上需要约 1 秒（本机实测 1.03s）。
+_CPU_QUERY = (
+    "SELECT Name, Manufacturer, Architecture, SocketDesignation, "
+    "NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, "
+    "L2CacheSize, L3CacheSize FROM Win32_Processor"
+)
+
+# psutil.cpu_percent 首次调用只能得到基线；后续 interval=None 可直接复用上次采样点。
+_CPU_LOAD_PRIMED = False
+
 
 @register_collector
 class CPUCollector(BaseCollector):
@@ -32,7 +43,7 @@ class CPUCollector(BaseCollector):
         """采集 CPU 信息"""
         try:
             c = get_wmi()
-            processors = c.Win32_Processor()
+            processors = c.query(_CPU_QUERY)
         except Exception as e:
             raise CollectorError(self.name, f"无法访问处理器信息: {e}")
 
@@ -121,10 +132,18 @@ class CPUCollector(BaseCollector):
         return None
 
     def _get_cpu_load(self) -> float | None:
-        """获取当前 CPU 负载（psutil 首次调用返回 0.0，先预热启动采样）"""
+        """获取当前 CPU 负载。
+
+        psutil 首次调用只建立采样基线，因此进程内第一次采集仍阻塞 0.1s
+        以获得有效值；之后（GUI 反复刷新）直接使用上次采样点，不再阻塞。
+        """
+        global _CPU_LOAD_PRIMED
         try:
             import psutil
-            psutil.cpu_percent(interval=None)  # 预热：记录采样起点
-            return psutil.cpu_percent(interval=0.1)
+            if not _CPU_LOAD_PRIMED:
+                psutil.cpu_percent(interval=None)  # 预热：记录采样起点
+                _CPU_LOAD_PRIMED = True
+                return psutil.cpu_percent(interval=0.1)
+            return psutil.cpu_percent(interval=None)
         except Exception:
             return None

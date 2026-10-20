@@ -42,6 +42,7 @@ class CollectorManager:
     """采集调度中心"""
 
     TIMEOUT = 10  # 单模块超时秒数
+    GRACE = 5     # 并行整体超时的宽限秒数（TIMEOUT + GRACE）
 
     def __init__(self):
         self._collectors: dict[str, BaseCollector] = {}
@@ -102,15 +103,62 @@ class CollectorManager:
     def _collect_parallel(self, targets: list[BaseCollector], result: CollectResult,
                           on_category: callable = None) -> None:
         """并行采集"""
-        def _run_collector(collector: BaseCollector) -> tuple[dict, float]:
-            """在工作线程中执行采集，完成后清理 COM"""
+        def _notify(name: str, data: dict | None, elapsed: float) -> None:
+            """调用进度回调；回调异常不应中断整个采集。"""
+            if not on_category:
+                return
+            try:
+                on_category(name, data, elapsed)
+            except Exception:
+                logger.exception("进度回调异常（模块 %s）", name)
+
+        def _run_collector(
+            collector: BaseCollector,
+        ) -> tuple[dict | None, float, Exception | None]:
+            """在工作线程中执行采集，完成后清理 COM。
+
+            异常也带回耗时，避免失败模块在 timings 中恒为 0。
+            """
             t0 = time.perf_counter()
             try:
                 data = collector.collect()
-                return data, round(time.perf_counter() - t0, 3)
+                return data, round(time.perf_counter() - t0, 3), None
+            except Exception as e:  # noqa: BLE001 - 交给调度层分类处理
+                return None, round(time.perf_counter() - t0, 3), e
             finally:
-                from utils.wmi_helper import cleanup_com
-                cleanup_com()
+                try:
+                    from utils.wmi_helper import cleanup_com
+                    cleanup_com()
+                except Exception:
+                    pass
+
+        def _consume(future, collector: BaseCollector) -> None:
+            """消费一个已完成的 future（成功/失败都记录耗时与回调）。"""
+            try:
+                data, elapsed, exc = future.result()
+            except Exception as e:  # future 自身异常（极少）
+                data, elapsed, exc = None, 0.0, e
+
+            result.timings[collector.name] = elapsed
+
+            if exc is None:
+                result.data[collector.name] = data
+                _notify(collector.name, data, elapsed)
+            elif isinstance(exc, CollectorError):
+                result.errors.append({"模块": collector.name, "错误": str(exc)})
+                logger.warning("模块 %s 采集失败: %s", collector.name, exc)
+                _notify(collector.name, None, elapsed)
+            else:
+                result.errors.append(
+                    {"模块": collector.name, "错误": f"未知错误: {exc}"}
+                )
+                logger.error(
+                    "模块 %s 采集异常: %s",
+                    collector.name,
+                    exc,
+                    exc_info=(type(exc), exc, exc.__traceback__),
+                )
+                _notify(collector.name, None, elapsed)
 
         executor = _get_shared_executor(len(targets))
         future_map = {
@@ -118,43 +166,51 @@ class CollectorManager:
             for collector in targets
         }
 
+        handled: set[str] = set()
+        overall_timeout = self.TIMEOUT + self.GRACE
+
         try:
             # as_completed 的 timeout 是整体兜底：WMI COM 调用可能无限阻塞，
             # 超时后放弃等待，未完成模块由外层 except 标记为超时。
             # 注意：as_completed 只产出已完成的 future，
             # 因此 future.result() 不会超时，无需再传 timeout。
-            for future in as_completed(future_map, timeout=self.TIMEOUT + 5):
+            for future in as_completed(future_map, timeout=overall_timeout):
                 collector = future_map[future]
-                try:
-                    data, elapsed = future.result()
-                    result.data[collector.name] = data
-                    result.timings[collector.name] = elapsed
-                    if on_category:
-                        on_category(collector.name, data, elapsed)
-                except CollectorError as e:
-                    result.errors.append({"模块": collector.name, "错误": str(e)})
-                    logger.warning("模块 %s 采集失败: %s", collector.name, e)
-                    if on_category:
-                        on_category(collector.name, None, result.timings.get(collector.name, 0.0))
-                except Exception as e:
-                    result.errors.append({"模块": collector.name, "错误": f"未知错误: {e}"})
-                    logger.exception("模块 %s 采集异常", collector.name)
-                    if on_category:
-                        on_category(collector.name, None, result.timings.get(collector.name, 0.0))
+                if collector.name in handled:
+                    continue
+                handled.add(collector.name)
+                _consume(future, collector)
         except FuturesTimeoutError:
-            # as_completed 总超时兜底：WMI COM 调用可能无限阻塞，
-            # 整体超时后将未完成模块标记为超时，避免整个采集抛异常
-            logger.error("并行采集整体超时(%ss)，未完成模块标记为超时", self.TIMEOUT + 5)
-            for collector in future_map.values():
-                if collector.name not in result.data:
-                    result.errors.append({"模块": collector.name, "错误": "采集超时"})
-                    result.timings[collector.name] = self.TIMEOUT
-                    if on_category:
-                        on_category(collector.name, None, float(self.TIMEOUT))
+            logger.error(
+                "并行采集整体超时(%ss)，未完成模块标记为超时", overall_timeout
+            )
+
+            # 先回收恰好完成但尚未被 as_completed 消费的 future，
+            # 避免把成功/已失败模块再次标记为超时。
+            for future, collector in future_map.items():
+                if collector.name in handled:
+                    continue
+                if future.done() and not future.cancelled():
+                    handled.add(collector.name)
+                    _consume(future, collector)
+
+            # 取消尚未开始的任务，减少线程池占用
+            for future in future_map:
+                if not future.done():
+                    future.cancel()
+
+            # 剩余未完成的才标记为超时
+            for _future, collector in future_map.items():
+                if collector.name in handled:
+                    continue
+                handled.add(collector.name)
+                result.errors.append({"模块": collector.name, "错误": "采集超时"})
+                result.timings[collector.name] = self.TIMEOUT
+                _notify(collector.name, None, float(self.TIMEOUT))
 
     def _collect_sequential(self, targets: list[BaseCollector], result: CollectResult,
                             on_category: callable = None) -> None:
-        """顺序采集（调试用）"""
+        """顺序采集（GUI 使用：逐类读取、完成一类即回调）"""
         for collector in targets:
             t0 = time.perf_counter()
             try:

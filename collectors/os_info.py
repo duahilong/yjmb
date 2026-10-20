@@ -7,6 +7,12 @@ from core.base import BaseCollector, CollectorError
 from core.registry import register_collector
 from utils.wmi_helper import get_wmi, parse_wmi_datetime, parse_wmi_date_only
 
+# 投影查询：SELECT * 会带回大量用不到的属性，耗时约为投影查询的 20 倍。
+_OS_QUERY = (
+    "SELECT Caption, Version, BuildNumber, OSArchitecture, "
+    "InstallDate, LastBootUpTime, WindowsDirectory FROM Win32_OperatingSystem"
+)
+
 
 @register_collector
 class OSCollector(BaseCollector):
@@ -18,7 +24,7 @@ class OSCollector(BaseCollector):
         """采集操作系统信息"""
         try:
             c = get_wmi()
-            os_list = c.Win32_OperatingSystem()
+            os_list = c.query(_OS_QUERY)
         except Exception as e:
             raise CollectorError(self.name, f"无法访问操作系统信息: {e}")
 

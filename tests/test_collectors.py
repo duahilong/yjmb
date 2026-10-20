@@ -30,7 +30,7 @@ class TestCPUCollector:
     def test_basic_fields(self, mock_load, mock_winreg, mock_wmi):
         mock_c = MagicMock()
         mock_wmi.return_value = mock_c
-        mock_c.Win32_Processor.return_value = [
+        mock_c.query.return_value = [
             make_wmi_obj(
                 Name="Intel(R) Core(TM) i9-14900K",
                 Manufacturer="GenuineIntel",
@@ -69,12 +69,85 @@ class TestCPUCollector:
     def test_no_processor_raises(self, mock_wmi):
         mock_c = MagicMock()
         mock_wmi.return_value = mock_c
-        mock_c.Win32_Processor.return_value = []
+        mock_c.query.return_value = []
 
         from collectors.cpu import CPUCollector
         from core.base import CollectorError
         with pytest.raises(CollectorError):
             CPUCollector().collect()
+
+    @patch("collectors.cpu.get_wmi")
+    @patch("collectors.cpu.winreg")
+    @patch("collectors.cpu.CPUCollector._get_cpu_load", return_value=15.0)
+    def test_uses_projection_query(self, mock_load, mock_winreg, mock_wmi):
+        """必须用投影查询，避免 SELECT * 触发慢速 LoadPercentage。"""
+        mock_c = MagicMock()
+        mock_wmi.return_value = mock_c
+        mock_c.query.return_value = [make_wmi_obj(
+            Name="Test CPU", Manufacturer="Test", Architecture=9,
+            SocketDesignation="LGA1700", NumberOfCores=8,
+            NumberOfLogicalProcessors=16, MaxClockSpeed=3000,
+            L2CacheSize=2048, L3CacheSize=16384,
+        )]
+        mock_c.Win32_ComputerSystem.return_value = []
+        mock_winreg.OpenKey.return_value = MagicMock()
+        mock_winreg.QueryValueEx.return_value = ("AuthenticAMD Family 25", 4)
+
+        from collectors.cpu import CPUCollector
+        CPUCollector().collect()
+
+        query = mock_c.query.call_args[0][0]
+        assert "Win32_Processor" in query
+        assert "LoadPercentage" not in query
+        assert "NumberOfLogicalProcessors" in query
+        mock_c.Win32_Processor.assert_not_called()
+
+    def test_cpu_load_reuses_sample_after_first_call(self, monkeypatch):
+        """进程内第二次采集不应再阻塞 0.1s。"""
+        import collectors.cpu as cpu_mod
+
+        monkeypatch.setattr(cpu_mod, "_CPU_LOAD_PRIMED", False)
+        with patch("psutil.cpu_percent", side_effect=[0.0, 12.5, 20.0]) as mock_cpu:
+            assert cpu_mod.CPUCollector()._get_cpu_load() == 12.5
+            assert cpu_mod.CPUCollector()._get_cpu_load() == 20.0
+
+        assert mock_cpu.call_args_list[1].kwargs["interval"] == 0.1
+        assert mock_cpu.call_args_list[2].kwargs["interval"] is None
+
+
+# ============================================================
+# OS 模块
+# ============================================================
+
+class TestOSCollector:
+    @patch("collectors.os_info.get_wmi")
+    def test_projection_query(self, mock_wmi):
+        """OS 信息应使用投影查询，字段解析保持不变。"""
+        mock_c = MagicMock()
+        mock_wmi.return_value = mock_c
+        mock_c.query.return_value = [make_wmi_obj(
+            Caption="Microsoft Windows 11 专业版",
+            Version="10.0.26100",
+            BuildNumber="26100",
+            OSArchitecture="64 位",
+            InstallDate="20250323183420.000000+480",
+            LastBootUpTime="20261020205200.500000+480",
+            WindowsDirectory="C:\\WINDOWS",
+        )]
+
+        from collectors.os_info import OSCollector
+        result = OSCollector().collect()
+
+        assert result["系统名称"] == "Microsoft Windows 11 专业版"
+        assert result["版本号"] == "10.0.26100 (26100)"
+        assert result["安装日期"] == "2025-03-23"
+        assert result["上次启动"] == "2026-10-20 20:52:00"
+        assert result["系统目录"] == "C:\\WINDOWS"
+
+        query = mock_c.query.call_args[0][0]
+        assert "Win32_OperatingSystem" in query
+        assert "SELECT Caption" in query
+        mock_c.Win32_OperatingSystem.assert_not_called()
 
 
 # ============================================================
@@ -83,7 +156,9 @@ class TestCPUCollector:
 
 class TestStorageCollector:
     @patch("collectors.storage.get_wmi")
-    def test_basic_fields(self, mock_wmi):
+    @patch("collectors.storage.StorageCollector._get_physical_disk_map",
+           return_value={})
+    def test_basic_fields(self, mock_physical, mock_wmi):
         mock_c = MagicMock()
         mock_wmi.return_value = mock_c
 
@@ -95,6 +170,7 @@ class TestStorageCollector:
             FirmwareRevision="5B2QGXA7",
             SerialNumber="S5GXNY0R123456",
             DeviceID="\\\\.\\PHYSICALDRIVE0",
+            Index=0,
         )
         mock_c.Win32_DiskDrive.return_value = [drive]
         mock_c.Win32_LogicalDisk.return_value = []
@@ -110,7 +186,9 @@ class TestStorageCollector:
         assert disk["固件"] == "5B2QGXA7"
 
     @patch("collectors.storage.get_wmi")
-    def test_nvme_detection(self, mock_wmi):
+    @patch("collectors.storage.StorageCollector._get_physical_disk_map",
+           return_value={})
+    def test_nvme_detection(self, mock_physical, mock_wmi):
         mock_c = MagicMock()
         mock_wmi.return_value = mock_c
 
@@ -122,6 +200,7 @@ class TestStorageCollector:
             FirmwareRevision="SN08193",
             SerialNumber="0000_0000",
             DeviceID="\\\\.\\PHYSICALDRIVE1",
+            Index=1,
         )
         mock_c.Win32_DiskDrive.return_value = [drive]
         mock_c.Win32_LogicalDisk.return_value = []
@@ -133,7 +212,60 @@ class TestStorageCollector:
         assert disk["类型"] == "SSD"
 
     @patch("collectors.storage.get_wmi")
-    def test_no_drives_raises(self, mock_wmi):
+    @patch("collectors.storage.StorageCollector._get_physical_disk_map",
+           return_value={0: {"media_type": 4, "bus_type": 11}})
+    def test_msft_physical_disk_overrides_keywords(self, mock_physical, mock_wmi):
+        """MediaType/BusType 应优先于型号关键词（修 SATA SSD 被猜成 NVMe/HDD）。"""
+        mock_c = MagicMock()
+        mock_wmi.return_value = mock_c
+
+        drive = make_wmi_obj(
+            Model="Seagate FireCuda 530",  # 旧关键词会因 seagate 判 HDD
+            InterfaceType="SCSI",
+            PNPDeviceID="PCI\\VEN_1BB1&DEV_4018",
+            Size="1000204886016",
+            FirmwareRevision="SU6SM001",
+            SerialNumber="000000000000",
+            DeviceID="\\\\.\\PHYSICALDRIVE0",
+            Index=0,
+        )
+        mock_c.Win32_DiskDrive.return_value = [drive]
+        mock_c.Win32_LogicalDisk.return_value = []
+
+        from collectors.storage import StorageCollector
+        disk = StorageCollector().collect()["磁盘列表"][0]
+        assert disk["类型"] == "SSD"
+        assert disk["接口"] == "SATA"
+
+    @patch("collectors.storage.get_wmi")
+    @patch("collectors.storage.StorageCollector._get_physical_disk_map",
+           return_value={})
+    def test_scsi_ssd_is_not_misreported_as_nvme(self, mock_physical, mock_wmi):
+        """SCSI + 型号含 SSD 只能是 SATA，不能推断成 NVMe。"""
+        mock_c = MagicMock()
+        mock_wmi.return_value = mock_c
+
+        drive = make_wmi_obj(
+            Model="WD Blue SA510 1TB",
+            InterfaceType="SCSI",
+            PNPDeviceID="PCI\\VEN_15B7&DEV_5041",
+            Size="1000204886016",
+            FirmwareRevision="1.0",
+            SerialNumber="0000",
+            DeviceID="\\\\.\\PHYSICALDRIVE0",
+            Index=0,
+        )
+        mock_c.Win32_DiskDrive.return_value = [drive]
+        mock_c.Win32_LogicalDisk.return_value = []
+
+        from collectors.storage import StorageCollector
+        disk = StorageCollector().collect()["磁盘列表"][0]
+        assert disk["接口"] == "SATA"
+
+    @patch("collectors.storage.get_wmi")
+    @patch("collectors.storage.StorageCollector._get_physical_disk_map",
+           return_value={})
+    def test_no_drives_raises(self, mock_physical, mock_wmi):
         mock_c = MagicMock()
         mock_wmi.return_value = mock_c
         mock_c.Win32_DiskDrive.return_value = []
@@ -279,7 +411,7 @@ class TestNetworkCollector:
             Index=1,
         )
         mock_c.Win32_NetworkAdapter.return_value = [adapter]
-        mock_c.Win32_NetworkAdapterConfiguration.return_value = [
+        mock_c.query.return_value = [
             make_wmi_obj(
                 Index=1,
                 IPAddress=["192.168.1.100", "fe80::1"],
@@ -298,6 +430,12 @@ class TestNetworkCollector:
         assert nic["状态"] == "已连接"
         assert nic["IPv4"] == "192.168.1.100"
         assert nic["网关"] == "192.168.1.1"
+
+        # 网卡配置必须用投影查询，避免 SELECT * 的额外开销
+        config_query = mock_c.query.call_args[0][0]
+        assert "Win32_NetworkAdapterConfiguration" in config_query
+        assert "SELECT Index" in config_query
+        mock_c.Win32_NetworkAdapterConfiguration.assert_not_called()
 
     @patch("collectors.network.NetworkCollector._get_wifi_info", return_value=None)
     @patch("collectors.network.get_wmi")
@@ -318,9 +456,33 @@ class TestNetworkCollector:
             Index=2,
         )
         mock_c.Win32_NetworkAdapter.return_value = [adapter]
-        mock_c.Win32_NetworkAdapterConfiguration.return_value = []
+        mock_c.query.return_value = []
 
         from collectors.network import NetworkCollector
         result = NetworkCollector().collect()
         nic = result["网卡列表"][0]
         assert nic["速率_Gbps"] is None  # 溢出值被过滤
+
+    def test_signal_percent_to_dbm(self):
+        """Windows 信号质量 0~100 对应 -100 ~ -50 dBm。"""
+        from collectors.network import NetworkCollector
+
+        assert NetworkCollector._signal_percent_to_dbm(0) == -100
+        assert NetworkCollector._signal_percent_to_dbm(50) == -75
+        assert NetworkCollector._signal_percent_to_dbm(80) == -60
+        assert NetworkCollector._signal_percent_to_dbm(100) == -50
+        # 越界值应被夹紧，不能出现正 dBm
+        assert NetworkCollector._signal_percent_to_dbm(120) == -50
+        assert NetworkCollector._signal_percent_to_dbm(-5) == -100
+
+    @patch("utils.powershell.run_command")
+    def test_wifi_info_signal_parsing(self, mock_run):
+        """netsh 解析出的信号百分比应按正确公式转成 dBm。"""
+        mock_run.return_value = (
+            "    SSID                   : TestWiFi\n"
+            "    Signal                 : 80%\n"
+        )
+        from collectors.network import NetworkCollector
+        info = NetworkCollector()._get_wifi_info()
+        assert info["SSID"] == "TestWiFi"
+        assert info["信号_dBm"] == -60

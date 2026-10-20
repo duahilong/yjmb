@@ -2,11 +2,15 @@
 collectors/gpu.py - 显卡信息采集
 """
 import re
+import winreg
 
 from core.base import BaseCollector, CollectorError
 from core.registry import register_collector
+from utils.logger import get_logger
 from utils.wmi_helper import get_wmi, parse_wmi_date_only
 from utils.format_utils import bytes_to_mb
+
+logger = get_logger(__name__)
 
 # pynvml 可用性缓存（避免无 N 卡机器每次采集都重复 import/init）
 _NVML: object | None = None       # pynvml 模块引用（None=不可用）
@@ -76,13 +80,11 @@ class GPUCollector(BaseCollector):
         # 判断独显/核显
         gpu_type = self._classify_gpu(name, adapter_compat, gpu.PNPDeviceID)
 
-        # 显存（WMI 的 AdapterRAM 是 32 位整数，超过 4GB 会溢出）
-        vram_mb = None
-        if gpu.AdapterRAM:
-            vram_mb = bytes_to_mb(int(gpu.AdapterRAM))
-            # 如果值异常（负数或超过 64GB），可能是溢出
-            if vram_mb and (vram_mb < 0 or vram_mb > 65536):
-                vram_mb = None
+        # 显存：优先读注册表 qwMemorySize（QWORD，>4GB 不溢出）；
+        # WMI AdapterRAM 是 uint32，>4GB 会饱和成 0xFFF00000 附近的值。
+        vram_mb = self._resolve_vram_mb(
+            gpu.AdapterRAM, self._read_vram_from_registry(gpu.PNPDeviceID)
+        )
 
         # 分辨率
         resolution = None
@@ -109,6 +111,88 @@ class GPUCollector(BaseCollector):
             "负载_百分比": None,   # 由 pynvml 补充
             "显存使用_MB": None,   # 由 pynvml 补充
         }
+
+    @staticmethod
+    def _resolve_vram_mb(adapter_ram, registry_mb: int | None) -> int | None:
+        """合并注册表与 WMI 的显存值（单位 MB）。
+
+        注册表 HardwareInformation.qwMemorySize 是 64 位值，优先使用；
+        WMI AdapterRAM 在 >= 0xFFF00000（约 4095MB）时视为 uint32 溢出/饱和，
+        不再当成真实显存（否则 8GB AMD 卡会显示 4095MB）。
+        """
+        if registry_mb is not None:
+            return registry_mb
+
+        try:
+            raw = int(adapter_ram or 0)
+        except (TypeError, ValueError):
+            return None
+
+        if 0 < raw < 0xFFF00000:
+            return bytes_to_mb(raw)
+        return None
+
+    @staticmethod
+    def _read_vram_from_registry(pnp_id: str | None) -> int | None:
+        """从显示适配器类注册表读取真实显存（MB）。
+
+        路径：
+        HKLM\\SYSTEM\\CurrentControlSet\\Control\\Class\\
+            {4d36e968-e325-11ce-bfc1-08002be10318}\\<NNNN>\\
+            HardwareInformation.qwMemorySize
+
+        用 VEN/DEV 匹配设备，未找到时返回 None。
+        """
+        if not pnp_id or not isinstance(pnp_id, str):
+            return None
+
+        match = re.search(r"VEN_([0-9A-F]{4})&DEV_([0-9A-F]{4})", pnp_id.upper())
+        if not match:
+            return None
+        ven_dev = f"VEN_{match.group(1)}&DEV_{match.group(2)}"
+
+        class_path = (
+            r"SYSTEM\CurrentControlSet\Control\Class"
+            r"\{4d36e968-e325-11ce-bfc1-08002be10318}"
+        )
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, class_path) as root:
+                subkey_count = winreg.QueryInfoKey(root)[0]
+                for i in range(subkey_count):
+                    try:
+                        subkey = winreg.EnumKey(root, i)
+                    except OSError:
+                        break
+
+                    try:
+                        with winreg.OpenKey(root, subkey) as key:
+                            try:
+                                matching, _ = winreg.QueryValueEx(
+                                    key, "MatchingDeviceId"
+                                )
+                            except FileNotFoundError:
+                                continue
+                            if not isinstance(matching, str):
+                                continue
+                            if ven_dev not in matching.upper():
+                                continue
+
+                            try:
+                                size, _ = winreg.QueryValueEx(
+                                    key, "HardwareInformation.qwMemorySize"
+                                )
+                            except FileNotFoundError:
+                                continue
+                            if isinstance(size, int) and size > 0:
+                                return bytes_to_mb(size)
+                    except OSError:
+                        continue
+        except OSError:
+            logger.debug("读取显卡注册表显存失败", exc_info=True)
+            return None
+
+        return None
 
     def _fallback_pci_info(
         self, name: str, vendor: str, pnp_id: str | None

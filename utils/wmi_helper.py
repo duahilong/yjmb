@@ -14,30 +14,48 @@ _thread_local = threading.local()
 # 因此连接的首次创建需全局串行化。
 _init_lock = threading.Lock()
 
+_DEFAULT_NAMESPACE = "root\\cimv2"
 
-def get_wmi():
-    """获取当前线程的 root\\cimv2 WMI 连接（线程本地单例）"""
-    if not hasattr(_thread_local, 'wmi_connection') or _thread_local.wmi_connection is None:
+
+def _connections() -> dict[str, object]:
+    """当前线程的 命名空间 → WMI 连接 缓存。"""
+    conns = getattr(_thread_local, "connections", None)
+    if conns is None:
+        conns = {}
+        _thread_local.connections = conns
+    return conns
+
+
+def get_wmi(namespace: str = _DEFAULT_NAMESPACE):
+    """获取当前线程指定命名空间的 WMI 连接（线程本地缓存）。
+
+    默认 root\\cimv2；其他常用命名空间：
+    - root\\wmi（显示器 EDID 等）
+    - root\\Microsoft\\Windows\\Storage（MSFT_PhysicalDisk 等）
+    """
+    conns = _connections()
+    conn = conns.get(namespace)
+    if conn is None:
         with _init_lock:
             # 双重检查：等待锁期间可能已被本线程创建
-            if not hasattr(_thread_local, 'wmi_connection') or _thread_local.wmi_connection is None:
+            conn = conns.get(namespace)
+            if conn is None:
                 import pythoncom
                 import wmi
                 pythoncom.CoInitialize()
-                _thread_local.wmi_connection = wmi.WMI()
-    return _thread_local.wmi_connection
+                conn = wmi.WMI(namespace=namespace)
+                conns[namespace] = conn
+    return conn
+
+
+def get_wmi_namespace(namespace: str):
+    """按命名空间获取 WMI 连接（get_wmi 的显式别名，便于调用方阅读）。"""
+    return get_wmi(namespace)
 
 
 def get_wmi_root():
-    """获取当前线程的 root\\wmi WMI 连接（用于显示器、SMART）"""
-    if not hasattr(_thread_local, 'wmi_root') or _thread_local.wmi_root is None:
-        with _init_lock:
-            if not hasattr(_thread_local, 'wmi_root') or _thread_local.wmi_root is None:
-                import pythoncom
-                import wmi
-                pythoncom.CoInitialize()
-                _thread_local.wmi_root = wmi.WMI(namespace="root\\wmi")
-    return _thread_local.wmi_root
+    """获取当前线程的 root\\wmi WMI 连接（用于显示器等）"""
+    return get_wmi("root\\wmi")
 
 
 def cleanup_com():
@@ -50,11 +68,11 @@ def cleanup_com():
     try:
         import gc
 
-        # 显式删除 WMI 连接对象，释放 COM 引用
-        if hasattr(_thread_local, 'wmi_connection'):
-            del _thread_local.wmi_connection
-        if hasattr(_thread_local, 'wmi_root'):
-            del _thread_local.wmi_root
+        # 显式释放 WMI 连接对象（含所有命名空间），释放 COM 引用
+        conns = getattr(_thread_local, "connections", None)
+        if conns is not None:
+            conns.clear()
+            del _thread_local.connections
 
         # 强制垃圾回收，尽早释放 COM 接口
         gc.collect()

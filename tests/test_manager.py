@@ -109,6 +109,37 @@ class TestCollectorManager:
         assert listing[0]["name"] == "fake_a"
         assert listing[1]["name"] == "fake_b"
 
+    def test_timeout_does_not_duplicate_failed_module(self):
+        """整体超时只标记真正未完成的模块，已失败模块不再报一次超时。"""
+        import threading
+
+        release = threading.Event()
+
+        class SlowCollector(BaseCollector):
+            name = "slow"
+            label = "慢模块"
+            order = 99
+
+            def collect(self) -> dict:
+                release.wait(5)
+                return {"数据": "slow"}
+
+        mgr = CollectorManager()
+        mgr.TIMEOUT = 0
+        mgr.GRACE = 0.05
+        mgr.register(FakeCollectorError())
+        mgr.register(SlowCollector())
+
+        try:
+            result = mgr.collect(parallel=True)
+        finally:
+            release.set()
+
+        errors = {(e["模块"], e["错误"]) for e in result.errors}
+        assert ("fake_err", "[fake_err] 模拟致命错误") in errors
+        assert ("fake_err", "采集超时") not in errors
+        assert ("slow", "采集超时") in errors
+
 
 class TestCollectResult:
     def test_default_values(self):

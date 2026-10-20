@@ -122,7 +122,11 @@ class NetworkCollector(BaseCollector):
         """构建网卡 Index → IP 配置的映射"""
         result = {}
         try:
-            configs = c.Win32_NetworkAdapterConfiguration(IPEnabled=True)
+            # 投影查询：避免 SELECT * 带回大量用不到的配置属性
+            configs = c.query(
+                "SELECT Index, IPAddress, IPSubnet, DefaultIPGateway "
+                "FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled=TRUE"
+            )
             for cfg in configs:
                 info = {}
                 # 取第一个 IPv4 地址
@@ -168,14 +172,23 @@ class NetworkCollector(BaseCollector):
                     if "SSID" in key and "BSSID" not in key:
                         info["SSID"] = value
                     elif "Signal" in key or "信号" in key:
-                        # 信号强度通常是百分比，转为大约的 dBm
+                        # Windows wlanSignalQuality(0~100) 对应 -100 ~ -50 dBm
                         try:
                             percent = int(value.replace("%", ""))
-                            # 粗略换算: dBm ≈ (percent - 100) / 2
-                            info["信号_dBm"] = round((percent - 100) / 2)
+                            info["信号_dBm"] = self._signal_percent_to_dbm(percent)
                         except ValueError:
                             pass
 
             return info if info else None
         except Exception:
             return None
+
+    @staticmethod
+    def _signal_percent_to_dbm(percent: int) -> int:
+        """WiFi 信号百分比 → dBm。
+
+        Windows 的 0~100 信号质量线性对应 -100 ~ -50 dBm：
+        50% → -75 dBm，80% → -60 dBm。
+        """
+        percent = max(0, min(100, int(percent)))
+        return round(percent / 2 - 100)
