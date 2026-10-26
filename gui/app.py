@@ -71,7 +71,7 @@ def run_gui() -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName("HWInfo")
-    app.setApplicationDisplayName("HWInfo - Windows 硬件检测工具")
+    app.setApplicationDisplayName("Windows 硬件检测工具")
     app.setOrganizationName("HWInfo")
     app.setWindowIcon(app_icon())
     # Fusion 对 QSS 圆角/边框的渲染最稳定，不受 Windows 原生控件主题干扰
