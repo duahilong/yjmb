@@ -2,7 +2,7 @@
 tests/test_gui_integration.py - GUI 与采集调度的集成测试
 
 使用离屏 Qt + 假采集器验证：
-MainWindow → CollectWorker(QThread) → CollectorManager → 页面回填 → 二次刷新
+MainWindow → CollectWorker(QThread) → CollectorManager → 画板回填 → 二次刷新
 不依赖真实硬件，避免 CI 环境不稳定。
 """
 import json
@@ -90,21 +90,54 @@ def test_main_window_backend_integration(
         assert window._status.text() == "完成 2/2"
 
         overview = window._pages["overview"]
-        assert overview._id_model.text() == "本机"
-        assert "数据 2/9 类" in overview.meta_label.text()
+        board = overview.board
+        visible, mode_fields, all_fields = board.counts()
+        assert visible == mode_fields > 0
+        assert all_fields >= mode_fields
 
-        cpu_page = window._pages["cpu"]
-        storage_page = window._pages["storage"]
-        assert cpu_page._result is result
-        assert storage_page._result is result
-        assert cpu_page.grid.count() == 4
-        assert storage_page.grid.count() == 3
+        # 关键字段确实进了画板（不是空壳）
+        labels = {row.label for unit in board._units for row in unit.rows}
+        assert "名称" in labels
+        assert "容量" in labels or "序列号" in labels
 
-        # 导航切换
-        window._goto("cpu")
-        assert window._stack.currentWidget() is cpu_page
-        window._goto("overview")
-        assert window._stack.currentWidget() is overview
+        # 全部 / 精简切换
+        window._set_mode("all")
+        qapp.processEvents()
+        assert board.mode() == "all"
+        _, mode_all, all_all = board.counts()
+        assert mode_all == all_all
+        assert mode_all >= mode_fields
+        window._set_mode("brief")
+        qapp.processEvents()
+        assert board.mode() == "brief"
+
+        # 标签开关
+        window._labels_btn.setChecked(False)
+        qapp.processEvents()
+        assert board.labels() is False
+        window._labels_btn.setChecked(True)
+        qapp.processEvents()
+        assert board.labels() is True
+
+        # 搜索：命中数与计数文案（精简档 cpu 保留「名称」）
+        window._search.setText("13700K")
+        qapp.processEvents()
+        assert board.query() == "13700K"
+        hit, total, _ = board.counts()
+        assert 0 < hit < total
+        assert window._count.text().startswith("命中 ")
+        window._search.clear()
+        qapp.processEvents()
+        assert board.query() == ""
+
+        # 布局：自适应字号与栏数在合理范围内
+        window.resize(1440, 900)
+        window.show()
+        qapp.processEvents()
+        metrics = board.layout_metrics()
+        assert 8 <= metrics["font"] <= 40
+        assert 1 <= metrics["cols"] <= 6
+        assert metrics["rows"] > 0
 
         # 导出：验证 UI 读取 CollectResult 后写入完整 JSON
         export_path = tmp_path / "export.json"
@@ -117,7 +150,7 @@ def test_main_window_backend_integration(
         assert set(payload["data"]) == set(enabled)
         assert payload["errors"] == []
 
-        # 二次刷新：验证 QThread 可重复启动、页面继续接收新结果
+        # 二次刷新：验证 QThread 可重复启动、画板继续接收新结果
         first_result = result
         window.start_collect()
         second_result = _wait_for_result(window, qapp)
@@ -125,8 +158,7 @@ def test_main_window_backend_integration(
         assert second_result is not first_result
         assert second_result.errors == []
         assert window._status.text() == "完成 2/2"
-        assert cpu_page._result is second_result
-        assert storage_page._result is second_result
+        assert board._data == second_result.data
     finally:
         window.close()
         qapp.processEvents()

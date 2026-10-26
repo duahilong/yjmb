@@ -1,26 +1,19 @@
 ﻿"""
-gui/pages/settings.py - 设置页
+gui/pages/settings.py - 设置对话框
 
-显示类别开关与 CLI 共用 config.yaml 的 display 段；
-外观（主题 / 密度 / 置顶）与超时写入 gui / collect 段。
+显示类别与 CLI 共用 config.yaml 的 display 段；
+窗口置顶与采集超时写入 gui / collect 段。
 """
-import os
-import platform
-
-from PySide6.QtCore import Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QApplication, QFrame, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget,
+    QCheckBox, QDialog, QDialogButtonBox, QGridLayout, QHBoxLayout, QLabel,
+    QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 
-from core.constants import ALL_CATEGORIES, CATEGORY_LABELS, VERSION
+from core.constants import ALL_CATEGORIES, CATEGORY_LABELS
 from gui import prefs, theme
-from gui.components import (
-    BentoPage, ElidedLabel, Segmented, Switch, action_button, card, chip,
-    hline, label, pill,
-)
 
-# 每个类别在设置页里的用途说明
+# 每个类别在设置里的用途说明
 DESCRIPTIONS = {
     "os": "版本、安装与启动时间",
     "motherboard": "芯片组与 BIOS",
@@ -33,229 +26,81 @@ DESCRIPTIONS = {
     "monitor": "型号、分辨率与刷新率",
 }
 
-DENSITY_OPTIONS = ["compact", "comfortable", "large"]
-DENSITY_TEXT = ["紧凑", "舒适", "大"]
 
+class SettingsDialog(QDialog):
+    """类别开关 + 置顶 + 超时"""
 
-class SettingsPage(BentoPage):
-    """设置页"""
-
-    settings_saved = Signal()
-    appearance_changed = Signal()
-    on_top_changed = Signal(bool)
+    saved = Signal()
 
     def __init__(self, parent=None):
-        super().__init__("设置", "", columns=4, row_min=theme.sp(250), parent=parent)
-        self._switches: dict[str, Switch] = {}
-        self._tags: dict[str, object] = {}
+        super().__init__(parent)
+        self.setObjectName("settingsDialog")
+        self.setWindowTitle("设置")
+        self.setModal(True)
+        self.setMinimumWidth(theme.sp(420))
 
-        current = prefs.gui_prefs()
-        self._build_display()
-        self._build_appearance(current)
-        self._build_collect()
-        self._build_about()
-        self.finish()
-        self._build_footer()
-        self.set_meta("采集、显示与外观偏好 · 保存在 config.yaml")
+        display = prefs.display_map()
+        self._boxes: dict[str, QCheckBox] = {}
 
-    # ------------------------------------------------------------ 显示类别
+        root = QVBoxLayout(self)
+        root.setContentsMargins(theme.sp(22), theme.sp(18), theme.sp(22), theme.sp(16))
+        root.setSpacing(theme.sp(10))
 
-    def _build_display(self) -> None:
-        accent = theme.accent("os")
-        frame, body = card("显示类别", accent, "layers",
-                           tag=self._enabled_tag(), stretch=False)
-        self._tags["display"] = frame.tag_label
-        shown = prefs.display_map()
+        title = QLabel("设置")
+        title.setObjectName("dialogTitle")
+        root.addWidget(title)
+
+        hint = QLabel("类别开关与命令行共用同一份 config.yaml")
+        hint.setObjectName("groupTitle")
+        root.addWidget(hint)
 
         grid = QGridLayout()
+        grid.setContentsMargins(0, theme.sp(6), 0, theme.sp(4))
         grid.setHorizontalSpacing(theme.sp(18))
-        grid.setVerticalSpacing(theme.sp(10))
+        grid.setVerticalSpacing(theme.sp(4))
         for index, cat in enumerate(ALL_CATEGORIES):
-            cell, switch = self._toggle_cell(cat, shown.get(cat, True))
-            self._switches[cat] = switch
-            grid.addWidget(cell, index // 2, index % 2)
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        body.addLayout(grid)
-        body.addSpacing(theme.sp(10))
-        body.addWidget(label("关闭的类别不会参与采集，总览与详情页也不会显示。",
-                             "hintText", wrap=True))
-        self.add(frame, span=2)
+            box = QCheckBox(CATEGORY_LABELS.get(cat, cat))
+            box.setChecked(bool(display.get(cat, True)))
+            box.setToolTip(DESCRIPTIONS.get(cat, ""))
+            self._boxes[cat] = box
+            grid.addWidget(box, index // 3, index % 3)
+        root.addLayout(grid)
 
-    def _toggle_cell(self, cat: str, on: bool) -> tuple[QWidget, Switch]:
-        accent = theme.accent(cat)
-        cell = QWidget()
-        lay = QHBoxLayout(cell)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(theme.sp(10))
-        lay.addWidget(chip(accent, theme.CATEGORY_ICONS[cat],
-                           size=theme.sp(32), radius=theme.sp(10),
-                           icon_px=theme.sp(16)))
-        text = QVBoxLayout()
-        text.setSpacing(0)
-        text.addWidget(label(CATEGORY_LABELS.get(cat, cat), "rowName"))
-        text.addWidget(ElidedLabel(DESCRIPTIONS.get(cat, ""), "rowSub"))
-        lay.addLayout(text, 1)
-        switch = Switch(on, accent, on_change=lambda value, c=cat: self._on_category_toggle(c, value))
-        lay.addWidget(switch)
-        return cell, switch
+        line = QWidget()
+        line.setFixedHeight(1)
+        line.setStyleSheet(f"background-color: {theme.P['line']};")
+        root.addWidget(line)
 
-    def _on_category_toggle(self, cat: str, on: bool) -> None:
-        tag = self._tags.get("display")
-        if tag is not None:
-            tag.setText(self._enabled_tag())
+        options = QHBoxLayout()
+        options.setSpacing(theme.sp(10))
+        self._on_top = QCheckBox("窗口置顶")
+        self._on_top.setChecked(bool(prefs.gui_prefs().get("on_top", False)))
+        options.addWidget(self._on_top)
+        options.addStretch()
+        options.addWidget(QLabel("采集超时"))
+        self._timeout = QSpinBox()
+        self._timeout.setRange(3, 120)
+        self._timeout.setSuffix(" 秒")
+        self._timeout.setValue(prefs.get_timeout())
+        self._timeout.setFixedWidth(theme.sp(88))
+        options.addWidget(self._timeout)
+        root.addLayout(options)
 
-    def _enabled_tag(self) -> str:
-        enabled = sum(1 for s in self._switches.values() if s.is_on()) if self._switches else len(ALL_CATEGORIES)
-        return f"{enabled} / {len(ALL_CATEGORIES)} 启用"
+        buttons = QDialogButtonBox()
+        cancel = QPushButton("取消")
+        cancel.setObjectName("dialogCancel")
+        save = QPushButton("保存")
+        save.setObjectName("dialogSave")
+        save.setDefault(True)
+        buttons.addButton(cancel, QDialogButtonBox.ButtonRole.RejectRole)
+        buttons.addButton(save, QDialogButtonBox.ButtonRole.AcceptRole)
+        cancel.clicked.connect(self.reject)
+        save.clicked.connect(self.accept)
+        root.addWidget(buttons)
 
-    # ------------------------------------------------------------ 外观
-
-    def _build_appearance(self, current: dict) -> None:
-        accent = theme.accent("monitor")
-        frame, body = card("外观", accent, "monitor")
-        body.addWidget(label("卡片密度", "miniLabel"))
-        body.addSpacing(theme.sp(6))
-        density = current.get("density", "comfortable")
-        self._density = Segmented(
-            DENSITY_TEXT,
-            active=DENSITY_OPTIONS.index(density) if density in DENSITY_OPTIONS else 1,
-            on_change=self._on_density,
-        )
-        body.addWidget(self._density)
-
-        body.addSpacing(theme.sp(16))
-        body.addWidget(label("主题", "miniLabel"))
-        body.addSpacing(theme.sp(6))
-        self._theme = Segmented(
-            ["浅色", "深色"],
-            active=0 if current.get("theme", "light") == "light" else 1,
-            on_change=self._on_theme,
-        )
-        body.addWidget(self._theme)
-
-        body.addSpacing(theme.sp(16))
-        row = QHBoxLayout()
-        row.setSpacing(theme.sp(10))
-        row.addWidget(label("窗口置顶", "rowName"))
-        row.addStretch()
-        self._on_top = Switch(bool(current.get("on_top", False)), accent,
-                              on_change=self._on_on_top)
-        row.addWidget(self._on_top)
-        body.addLayout(row)
-        self.add(frame, span=2)
-
-    def _on_density(self, index: int) -> None:
-        name = DENSITY_OPTIONS[index]
-        theme.set_density(name)
-        prefs.set_gui_pref("density", name)
-        QTimer.singleShot(0, self.appearance_changed.emit)
-
-    def _on_theme(self, index: int) -> None:
-        name = "light" if index == 0 else "dark"
-        theme.set_theme(name)
-        prefs.set_gui_pref("theme", name)
-        QTimer.singleShot(0, self.appearance_changed.emit)
-
-    def _on_on_top(self, value: bool) -> None:
-        prefs.set_gui_pref("on_top", value)
-        self.on_top_changed.emit(value)
-
-    # ------------------------------------------------------------ 采集
-
-    def _build_collect(self) -> None:
-        accent = theme.accent("memory")
-        frame, body = card("采集", accent, "activity")
-        body.addWidget(label("采集方式", "miniLabel"))
-        body.addSpacing(theme.sp(6))
-        body.addWidget(label("顺序采集  ·  逐类读取，完成一类即时刷新", "rowName"))
-        body.addSpacing(theme.sp(4))
-        body.addWidget(label("避开多线程 WMI 并发竞态；单个类别失败不影响其它类别。",
-                             "hintText", wrap=True))
-        body.addSpacing(theme.sp(12))
-        body.addWidget(hline())
-        body.addSpacing(theme.sp(12))
-        body.addWidget(label("配置文件", "miniLabel"))
-        body.addSpacing(theme.sp(4))
-        body.addWidget(ElidedLabel(prefs.get_user_config_path(), "rowSub"))
-        self.add(frame, span=2)
-
-    # ------------------------------------------------------------ 关于
-
-    def _build_about(self) -> None:
-        accent = theme.accent("motherboard")
-        frame, body = card("关于", accent, "info", tag=VERSION)
-        for key, value in [
-            ("版本", VERSION),
-            ("运行时", f"Python {platform.python_version()}"),
-            ("界面", "PySide6 · Qt Widgets"),
-            ("平台", platform.platform(terse=True)),
-        ]:
-            row = QHBoxLayout()
-            row.setSpacing(theme.sp(8))
-            row.addWidget(label(key, "miniLabel"))
-            row.addStretch()
-            row.addWidget(ElidedLabel(value, "rowSub"), 1)
-            body.addLayout(row)
-            body.addSpacing(theme.sp(8))
-        body.addSpacing(theme.sp(4))
-        buttons = QHBoxLayout()
-        buttons.setSpacing(theme.sp(8))
-        buttons.addWidget(action_button("打开配置目录", "export", kind="ghost",
-                                        on_click=self._open_config_dir))
-        buttons.addWidget(action_button("复制诊断信息", "info", kind="ghost",
-                                        on_click=self._copy_diagnostics))
-        buttons.addStretch()
-        body.addLayout(buttons)
-        self.add(frame, span=2)
-
-    def _open_config_dir(self) -> None:
-        directory = os.path.dirname(prefs.get_user_config_path())
-        QDesktopServices.openUrl(QUrl.fromLocalFile(directory))
-
-    def _copy_diagnostics(self) -> None:
-        text = "\n".join([
-            f"HWInfo {VERSION}",
-            f"Python {platform.python_version()}",
-            platform.platform(),
-            f"配置: {prefs.get_user_config_path()}",
-        ])
-        QApplication.clipboard().setText(text)
-
-    # ------------------------------------------------------------ 底部操作条
-
-    def _build_footer(self) -> None:
-        bar = QFrame()
-        bar.setObjectName("actionBar")
-        bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        lay = QHBoxLayout(bar)
-        lay.setContentsMargins(theme.sp(20), theme.sp(12), theme.sp(16), theme.sp(12))
-        lay.setSpacing(theme.sp(12))
-        lay.addWidget(label("修改显示类别后需要重新采集才会刷新数据", "hintText"))
-        lay.addStretch()
-        lay.addWidget(action_button("恢复默认", kind="ghost", on_click=self._restore_defaults))
-        lay.addWidget(action_button("保存设置", "check", kind="primary", on_click=self._save))
-        self.add_footer(bar)
-
-    def _save(self) -> None:
-        prefs.set_display({cat: sw.is_on() for cat, sw in self._switches.items()})
-        self.settings_saved.emit()
-
-    def _restore_defaults(self) -> None:
-        for switch in self._switches.values():
-            switch.set_on(True)
-        theme.set_density("comfortable")
-        theme.set_theme("light")
-        self._density.set_active(1)
-        self._theme.set_active(0)
-        self._on_top.set_on(False)
-        tag = self._tags.get("display")
-        if tag is not None:
-            tag.setText(self._enabled_tag())
-        prefs.set_display({cat: True for cat in ALL_CATEGORIES})
-        prefs.set_gui_pref("theme", "light")
-        prefs.set_gui_pref("density", "comfortable")
-        prefs.set_gui_pref("on_top", False)
-        self.on_top_changed.emit(False)
-        self.settings_saved.emit()
-        QTimer.singleShot(0, self.appearance_changed.emit)
+    def accept(self) -> None:  # noqa: D102
+        prefs.set_display({cat: box.isChecked() for cat, box in self._boxes.items()})
+        prefs.set_gui_pref("on_top", self._on_top.isChecked())
+        prefs.set_timeout(self._timeout.value())
+        self.saved.emit()
+        super().accept()
